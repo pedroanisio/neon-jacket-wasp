@@ -239,7 +239,7 @@ function Renderer({ data }) {
         ))}
 
         {layers.contour && <g>
-          <path d={contourPath} fill="url(#cf)"/>
+          <path d={contourPath} fill="url(#cf)" fillRule="evenodd"/>
           <path d={contourPath} fill="none" stroke="#334155" strokeWidth={.7} strokeLinejoin="round"/>
         </g>}
 
