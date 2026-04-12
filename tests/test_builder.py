@@ -352,7 +352,7 @@ class TestMetaBuilder:
     def test_optional_multi_figure(self):
         meta = (
             _meta_builder()
-            .multi_figure_sheet(True, figure_index=0, figure_view="front")
+            .multi_figure_sheet(is_multi=True, figure_index=0, figure_view="front")
             .build()
         )
         assert meta.multi_figure_sheet is True

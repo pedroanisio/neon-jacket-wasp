@@ -16,6 +16,7 @@ Dependencies:
 import argparse
 import json
 import os
+import sys
 import numpy as np
 from collections import Counter
 from scipy.interpolate import CubicSpline
@@ -25,6 +26,8 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.stats import entropy as scipy_entropy
 from numpy.polynomial import polynomial as P
 import warnings
+
+from lib.builder import SilhouetteDocument
 
 warnings.filterwarnings("ignore")
 
@@ -1632,6 +1635,10 @@ def main():
     )
     parser.add_argument("input", help="Path to v2.json input file")
     parser.add_argument("output", help="Path to write v4.json output")
+    parser.add_argument(
+        "--strict", action="store_true",
+        help="Exit non-zero if the output has any Pydantic constraint violations",
+    )
     args = parser.parse_args()
 
     print(f"Loading {args.input}...")
@@ -1727,14 +1734,30 @@ def main():
         },
     }
 
-    # ── Write ──────────────────────────────────────────────────
-    with open(args.output, "w") as f:
-        json.dump(data, f, indent=2)
+    # ── Write via SilhouetteDocument ─────────────────────────
+    doc = SilhouetteDocument.from_dict(data, strict=False)
+    doc.to_json(args.output)
 
     size_kb = os.path.getsize(args.output) / 1024
     print(f"\n{'='*60}")
     print(f"Output: {args.output} ({size_kb:.1f} KB, {len(data.keys())} sections)")
+
+    # ── Validation report ─────────────────────────────────────
+    report = doc.verification_report()
+    errors = report.schema_errors
+    if errors:
+        print(f"Validation: {len(errors)} constraint violation(s)")
+        for err in errors[:5]:
+            print(f"  - {err}")
+        if len(errors) > 5:
+            print(f"  ... and {len(errors) - 5} more")
+    else:
+        print("Validation: clean (0 violations)")
     print(f"{'='*60}")
+
+    if args.strict and errors:
+        print(f"\nERROR: --strict mode: {len(errors)} violation(s). Aborting.")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
