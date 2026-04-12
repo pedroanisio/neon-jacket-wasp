@@ -30,10 +30,13 @@ from lib.model import (
     HuMoments,
     Landmark,
     LLMErrorClass,
+    Measurements,
     Meta,
+    MultiSpanEntry,
     PALS_LAW_VERSION,
     PrincipalAxes,
     Rectangularity,
+    ScanlineEntry,
     SegmentEndpointConvention,
     ShapeComplexity,
     StyleDeviation,
@@ -1424,3 +1427,148 @@ class TestP3BinaryPayload:
         builder._data["binary_payload"] = "data/contour.npy"
         meta = builder.build()
         assert meta.binary_payload == "data/contour.npy"
+
+
+# ═══════════════════════════════════════════════════════════
+# Multi-span scanline regression tests
+# ═══════════════════════════════════════════════════════════
+
+
+class TestMultiSpanEntry:
+    """MultiSpanEntry model for per-span contour crossing data."""
+
+    def test_basic(self):
+        e = MultiSpanEntry(outer_dx=0.7, inner_dx=0.16)
+        assert e.outer_dx == 0.7
+        assert e.inner_dx == 0.16
+
+    def test_negative_dx(self):
+        e = MultiSpanEntry(outer_dx=-0.3, inner_dx=-0.8)
+        assert e.outer_dx == -0.3
+
+
+class TestScanlineEntryTopology:
+    """ScanlineEntry must accept topology fields for multi-span data."""
+
+    def test_plain_scanline(self):
+        s = ScanlineEntry(right_dx=0.5, left_dx=0.5, full_width_hu=1.0)
+        assert s.contour_pairs is None
+        assert s.topology_detail is None
+        assert s.topology is None
+
+    def test_with_topology_detail(self):
+        s = ScanlineEntry(
+            right_dx=0.5, left_dx=0.5, full_width_hu=1.0,
+            contour_pairs=2,
+            topology_detail=[
+                {"outer_dx": 0.7, "inner_dx": 0.16},
+                {"outer_dx": -0.27, "inner_dx": -0.8},
+            ],
+        )
+        assert s.contour_pairs == 2
+        assert len(s.topology_detail) == 2
+        assert s.topology_detail[0].outer_dx == 0.7
+        assert s.topology_detail[1].inner_dx == -0.8
+
+    def test_with_topology_string(self):
+        s = ScanlineEntry(
+            right_dx=0.3, left_dx=0.3, full_width_hu=0.6,
+            topology="unknown",
+        )
+        assert s.topology == "unknown"
+
+    def test_six_spans(self):
+        """Arm+torso region can have 6 spans."""
+        spans = [
+            {"outer_dx": 1.28, "inner_dx": 1.08},
+            {"outer_dx": 1.02, "inner_dx": 0.95},
+            {"outer_dx": 0.78, "inner_dx": 0.05},
+            {"outer_dx": -0.10, "inner_dx": -0.85},
+            {"outer_dx": -1.01, "inner_dx": -1.09},
+            {"outer_dx": -1.15, "inner_dx": -1.35},
+        ]
+        s = ScanlineEntry(
+            right_dx=0.58, left_dx=0.58, full_width_hu=1.16,
+            contour_pairs=6,
+            topology_detail=spans,
+        )
+        assert s.contour_pairs == 6
+        assert len(s.topology_detail) == 6
+
+    def test_measurements_with_mixed_entries(self):
+        """Measurements dict can mix ScanlineEntry dicts and raw lists."""
+        m = Measurements(scanlines={
+            "5.00": {
+                "right_dx": 0.74, "left_dx": 0.74, "full_width_hu": 1.48,
+                "contour_pairs": 2,
+                "topology_detail": [
+                    {"outer_dx": 0.71, "inner_dx": 0.16},
+                    {"outer_dx": -0.27, "inner_dx": -0.80},
+                ],
+            },
+            "3.50": [
+                {"outer_dx": 1.22, "inner_dx": 0.97},
+                {"outer_dx": 0.71, "inner_dx": 0.54},
+            ],
+        })
+        # ScanlineEntry with topology_detail
+        entry = m.scanlines["5.00"]
+        assert hasattr(entry, "contour_pairs")
+        assert entry.contour_pairs == 2
+
+    def test_gap_between_legs(self):
+        """The gap between legs is inner_dx[0] to outer_dx[1]."""
+        s = ScanlineEntry(
+            right_dx=0.74, left_dx=0.74, full_width_hu=1.48,
+            contour_pairs=2,
+            topology_detail=[
+                {"outer_dx": 0.71, "inner_dx": 0.16},
+                {"outer_dx": -0.27, "inner_dx": -0.80},
+            ],
+        )
+        gap = s.topology_detail[0].inner_dx - s.topology_detail[1].outer_dx
+        assert gap > 0, "Gap should be positive (right leg inner > left leg outer)"
+        assert 0.3 < gap < 0.6, f"Expected ~0.43 HU gap, got {gap:.2f}"
+
+
+SAMPLE_JSON = Path(__file__).resolve().parent.parent / "data" / "output" / "generated_v4.json"
+
+
+@pytest.mark.skipif(
+    not SAMPLE_JSON.exists(),
+    reason="Sample pipeline output not available",
+)
+class TestMultiSpanIntegration:
+    """Integration: verify topology_detail survives the full pipeline."""
+
+    def test_topology_detail_present_in_output(self):
+        import json
+        d = json.loads(SAMPLE_JSON.read_text())
+        m = d["measurements"]["scanlines"]
+        with_detail = [
+            k for k, v in m.items()
+            if isinstance(v, dict) and "topology_detail" in v
+        ]
+        assert len(with_detail) > 0, (
+            "No scanline entries have topology_detail — "
+            "multi-span key matching may be broken"
+        )
+
+    def test_leg_level_has_two_spans(self):
+        import json
+        d = json.loads(SAMPLE_JSON.read_text())
+        m = d["measurements"]["scanlines"]
+        # dy=5.00 should have 2 spans (right leg + left leg)
+        entry = m.get("5.00")
+        assert entry is not None, "Missing scanline at dy=5.00"
+        assert isinstance(entry, dict), f"Expected dict, got {type(entry)}"
+        assert "topology_detail" in entry, "Missing topology_detail at dy=5.00"
+        assert entry["contour_pairs"] == 2
+        spans = entry["topology_detail"]
+        assert len(spans) == 2
+        # Right leg: positive dx
+        assert spans[0]["outer_dx"] > 0
+        assert spans[0]["inner_dx"] > 0
+        # Left leg: negative dx
+        assert spans[1]["outer_dx"] < 0
+        assert spans[1]["inner_dx"] < 0

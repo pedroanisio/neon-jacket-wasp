@@ -304,16 +304,19 @@ def phase_02_dense_scanlines(data, unique_dy, dx_deriv2, interp, sole_dy):
         new_scanlines[dy_key] = entry
         prev_dx_val = dx_val
 
-    # preserve original multi-pair topology
+    # Preserve original multi-pair topology.
+    # Raw v2 keys may be '5.0' while dense keys are '5.00' — normalize
+    # to the dense format so topology_detail lands on the right entry.
     for dy_key, orig_entries in data["measurements"]["scanlines"].items():
-        if dy_key in new_scanlines:
+        dense_key = f"{float(dy_key):.2f}"
+        if dense_key in new_scanlines:
             if isinstance(orig_entries, list) and len(orig_entries) > 1:
-                new_scanlines[dy_key]["contour_pairs"] = len(orig_entries)
-                new_scanlines[dy_key]["topology_detail"] = orig_entries
+                new_scanlines[dense_key]["contour_pairs"] = len(orig_entries)
+                new_scanlines[dense_key]["topology_detail"] = orig_entries
             elif isinstance(orig_entries, list) and len(orig_entries) == 1:
-                new_scanlines[dy_key]["topology"] = orig_entries[0].get("topology", "unknown")
+                new_scanlines[dense_key]["topology"] = orig_entries[0].get("topology", "unknown")
         else:
-            new_scanlines[dy_key] = orig_entries
+            new_scanlines[dense_key] = orig_entries
 
     data["measurements"]["scanlines"] = dict(
         sorted(new_scanlines.items(), key=lambda x: float(x[0]))

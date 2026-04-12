@@ -424,12 +424,20 @@ class Symmetry(_Strict):
 # ═══════════════════════════════════════════════════════════════
 
 
+class MultiSpanEntry(_Strict):
+    outer_dx: float
+    inner_dx: float
+
+
 class ScanlineEntry(_Strict):
     right_dx: float
     left_dx: float
     full_width_hu: float = Field(ge=0)
     d_width_d_dy: float | None = None
     curvature: float | None = None
+    contour_pairs: int | None = Field(None, ge=1)
+    topology_detail: list[MultiSpanEntry] | None = None
+    topology: str | None = None
 
 
 class Measurements(_Strict):

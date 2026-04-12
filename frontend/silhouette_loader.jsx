@@ -147,11 +147,56 @@ function normalize(raw) {
     }));
   }
 
+  // Interior holes from multi-span scanline measurements.
+  // Where scanlines have 2+ spans at a given dy, the gap between spans
+  // is an interior hole (e.g. the gap between separated legs).
+  // Build hole polygons from consecutive multi-span levels.
+  const holes = [];
+  if (isV4 && raw.measurements?.scanlines) {
+    const scanlines = raw.measurements.scanlines;
+    const multiSpanLevels = [];
+    for (const [dk, entry] of Object.entries(scanlines)) {
+      if (typeof entry === "object" && !Array.isArray(entry) && entry.topology_detail) {
+        const spans = entry.topology_detail;
+        if (Array.isArray(spans) && spans.length >= 2) {
+          // Gap between span 0 inner edge and span 1 outer edge
+          multiSpanLevels.push({
+            dy: parseFloat(dk),
+            gapLeft: spans[spans.length - 1].outer_dx,
+            gapRight: spans[0].inner_dx,
+          });
+        }
+      } else if (Array.isArray(entry) && entry.length >= 2) {
+        // Raw list format (v2 passthrough)
+        multiSpanLevels.push({
+          dy: parseFloat(dk),
+          gapLeft: entry[entry.length - 1].outer_dx,
+          gapRight: entry[0].inner_dx,
+        });
+      }
+    }
+    multiSpanLevels.sort((a, b) => a.dy - b.dy);
+
+    // Group consecutive levels into hole polygons
+    if (multiSpanLevels.length >= 2) {
+      let group = [multiSpanLevels[0]];
+      for (let i = 1; i < multiSpanLevels.length; i++) {
+        if (multiSpanLevels[i].dy - multiSpanLevels[i - 1].dy <= 0.25) {
+          group.push(multiSpanLevels[i]);
+        } else {
+          if (group.length >= 2) holes.push(group);
+          group = [multiSpanLevels[i]];
+        }
+      }
+      if (group.length >= 2) holes.push(group);
+    }
+  }
+
   const surface = cls.surface?.label || "unknown";
   const gender = cls.gender?.label || "unknown";
   const view = cls.view?.label || "unknown";
 
-  return { version, isV4, contour, strokes, landmarks, pr, br, ar, wp, sd, sc, gl, vol, hull, bio, med, surface, gender, view };
+  return { version, isV4, contour, strokes, landmarks, pr, br, ar, wp, sd, sc, gl, vol, hull, bio, med, holes, surface, gender, view };
 }
 
 function Renderer({ data }) {
@@ -164,8 +209,19 @@ function Renderer({ data }) {
   const contourPath = useMemo(() => {
     const r = D.contour.map(([dx,dy])=>hts(dx,dy));
     const l = [...D.contour].reverse().map(([dx,dy])=>hts(-dx,dy));
-    return "M "+[...r,...l].map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(" L ")+" Z";
-  },[D.contour]);
+    let path = "M "+[...r,...l].map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(" L ")+" Z";
+
+    // Append interior hole sub-paths from multi-span scanline data.
+    // Each hole is a polygon tracing the gap between separated body parts
+    // (e.g. the space between the legs). With fillRule="evenodd", these
+    // sub-paths carve out the holes from the main silhouette fill.
+    for (const hole of D.holes) {
+      const rightEdge = hole.map(h => hts(h.gapRight, h.dy));
+      const leftEdge = [...hole].reverse().map(h => hts(h.gapLeft, h.dy));
+      path += " M "+[...rightEdge,...leftEdge].map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(" L ")+" Z";
+    }
+    return path;
+  },[D.contour, D.holes]);
 
   const lmData = useMemo(()=>D.landmarks.map(lm=>{
     const [xR,y]=hts(lm.dx,lm.dy);

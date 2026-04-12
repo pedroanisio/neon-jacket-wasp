@@ -1,0 +1,754 @@
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body,html{width:100%;height:100%;overflow:hidden;background:#0a0b0f;font-family:'JetBrains Mono',monospace;color:#c8ccd4}
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&display=swap');
+#app{display:flex;width:100%;height:100%;position:relative}
+canvas{display:block;flex:1;cursor:crosshair}
+#panel{position:absolute;right:0;top:0;width:260px;height:100%;background:rgba(12,13,18,0.92);
+  border-left:1px solid rgba(100,120,180,0.15);padding:16px;overflow-y:auto;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+#panel::-webkit-scrollbar{width:4px}
+#panel::-webkit-scrollbar-thumb{background:rgba(100,120,180,0.3);border-radius:2px}
+.section{margin-bottom:18px}
+.section-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(100,140,255,0.6);margin-bottom:8px;font-weight:500}
+.btn-row{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.btn{padding:5px 10px;font-size:10px;font-family:inherit;background:rgba(60,80,140,0.15);
+  border:1px solid rgba(100,120,180,0.2);border-radius:3px;color:#8090b8;cursor:pointer;
+  transition:all .15s}
+.btn:hover{background:rgba(60,80,140,0.3);color:#b0c0e8}
+.btn.active{background:rgba(70,110,220,0.25);border-color:rgba(100,140,255,0.5);color:#a0c0ff;
+  box-shadow:0 0 8px rgba(80,120,255,0.15)}
+.slider-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.slider-label{font-size:9px;color:#6070a0;width:52px;flex-shrink:0;text-align:right}
+.slider-val{font-size:9px;color:#5868a8;width:32px;text-align:right}
+input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:rgba(60,80,140,0.3);
+  border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;
+  background:#4060c0;border-radius:50%;cursor:pointer;border:1px solid rgba(100,140,255,0.4)}
+.toggle-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer}
+.toggle-dot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(100,120,180,0.4);
+  transition:all .15s}
+.toggle-dot.on{background:rgba(80,140,255,0.6);border-color:rgba(100,160,255,0.7);
+  box-shadow:0 0 6px rgba(80,120,255,0.3)}
+.toggle-label{font-size:10px;color:#7888b8}
+.info{font-size:9px;color:#404860;line-height:1.5;margin-top:12px;padding-top:10px;
+  border-top:1px solid rgba(100,120,180,0.1)}
+.stat{display:flex;justify-content:space-between;margin-bottom:3px}
+.stat-v{color:#5868a8}
+#title-bar{position:absolute;left:16px;top:14px;pointer-events:none}
+#title-bar h1{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:rgba(100,140,255,0.5);font-weight:400}
+#title-bar p{font-size:9px;color:rgba(80,100,160,0.4);margin-top:2px}
+</style>
+<div id="app">
+  <canvas id="canvas"></canvas>
+  <div id="title-bar">
+    <h1>Silhouette v4 — Skeletal Deformation</h1>
+    <p>Triangulation · LBS · Forward Kinematics · Procedural Animation</p>
+  </div>
+  <div id="panel">
+    <div class="section">
+      <div class="section-title">Load Data</div>
+      <div class="btn-row">
+        <button class="btn" id="load-btn">Load JSON</button>
+      </div>
+      <input type="file" id="file-input" accept=".json" style="display:none">
+      <div id="load-status" style="font-size:9px;color:#404860;margin-top:4px"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Animation Preset</div>
+      <div class="btn-row" id="presets"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Bone Angles (deg)</div>
+      <div id="bone-sliders"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Display</div>
+      <div id="toggles"></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Speed</div>
+      <div class="slider-row">
+        <span class="slider-label">rate</span>
+        <input type="range" id="speed" min="0" max="200" value="100">
+        <span class="slider-val" id="speed-val">1.0×</span>
+      </div>
+    </div>
+    <div class="info" id="stats"></div>
+  </div>
+</div>
+<script>
+// ===================================================================
+// DATA — extracted from silhouette_v4 JSON (243-pt symmetric contour,
+// 19 landmarks, 15 key strokes). Contour is full mirrored polygon.
+// ===================================================================
+const D={"c":[0.007,0.005,0.105,0.013,0.212,0.042,0.311,0.089,0.398,0.157,0.468,0.241,0.521,0.335,0.556,0.436,0.564,0.541,0.563,0.614,0.554,0.683,0.539,0.747,0.52,0.808,0.503,0.852,0.494,0.879,0.494,0.896,0.493,0.917,0.481,0.945,0.463,0.968,0.444,0.984,0.423,0.996,0.395,1.008,0.361,1.018,0.336,1.03,0.321,1.046,0.314,1.064,0.313,1.085,0.317,1.108,0.33,1.133,0.348,1.162,0.368,1.19,0.384,1.214,0.389,1.232,0.382,1.247,0.367,1.26,0.343,1.272,0.322,1.278,0.314,1.283,0.32,1.296,0.338,1.319,0.366,1.35,0.399,1.387,0.438,1.429,0.483,1.474,0.531,1.52,0.578,1.565,0.628,1.613,0.679,1.662,0.731,1.711,0.782,1.76,0.831,1.809,0.874,1.856,0.91,1.901,0.94,1.942,0.967,1.982,0.991,2.022,1.012,2.062,1.028,2.1,1.038,2.137,1.044,2.173,1.047,2.209,1.048,2.245,1.052,2.282,1.06,2.319,1.065,2.356,1.061,2.392,1.049,2.426,1.031,2.459,1.008,2.49,0.979,2.519,0.93,2.551,0.87,2.574,0.804,2.591,0.742,2.604,0.696,2.618,0.672,2.637,0.668,2.661,0.661,2.693,0.63,2.727,0.587,2.755,0.556,2.779,0.553,2.804,0.564,2.829,0.579,2.851,0.608,2.878,0.655,2.909,0.71,2.941,0.766,2.974,0.822,3.008,0.874,3.044,0.918,3.082,0.956,3.119,0.992,3.156,1.026,3.194,1.055,3.234,1.078,3.273,1.098,3.312,1.115,3.353,1.131,3.395,1.147,3.438,1.158,3.479,1.164,3.52,1.17,3.561,1.179,3.603,1.193,3.644,1.208,3.687,1.225,3.731,1.245,3.775,1.264,3.819,1.281,3.862,1.296,3.906,1.308,3.949,1.311,3.993,1.304,4.033,1.287,4.071,1.259,4.107,1.224,4.139,1.183,4.169,1.138,4.197,1.091,4.224,1.041,4.251,0.992,4.278,0.948,4.306,0.911,4.336,0.881,4.367,0.857,4.399,0.838,4.431,0.823,4.463,0.809,4.495,0.795,4.527,0.779,4.558,0.767,4.59,0.764,4.619,0.763,4.638,0.755,4.656,0.733,4.682,0.702,4.717,0.672,4.753,0.648,4.788,0.629,4.824,0.613,4.861,0.603,4.897,0.601,4.934,0.607,4.972,0.618,5.011,0.637,5.051,0.661,5.091,0.685,5.133,0.703,5.173,0.71,5.214,0.7,5.254,0.681,5.291,0.666,5.328,0.663,5.367,0.669,5.407,0.682,5.449,0.697,5.489,0.713,5.53,0.73,5.571,0.748,5.613,0.768,5.656,0.784,5.699,0.795,5.74,0.8,5.779,0.801,5.817,0.798,5.856,0.797,5.896,0.801,5.937,0.807,5.978,0.812,6.019,0.814,6.06,0.81,6.101,0.804,6.142,0.798,6.183,0.792,6.224,0.786,6.265,0.783,6.306,0.783,6.348,0.784,6.389,0.784,6.431,0.781,6.473,0.776,6.514,0.768,6.556,0.759,6.598,0.752,6.639,0.749,6.681,0.751,6.723,0.756,6.766,0.756,6.808,0.745,6.849,0.722,6.889,0.692,6.928,0.659,6.967,0.626,7.005,0.594,7.043,0.56,7.081,0.525,7.118,0.5,7.155,0.486,7.193,0.48,7.232,0.479,7.271,0.481,7.311,0.485,7.35,0.492,7.39,0.509,7.43,0.544,7.472,0.595,7.516,0.648,7.563,0.691,7.609,0.721,7.655,0.743,7.701,0.76,7.747,0.778,7.793,0.794,7.834,0.797,7.867,0.805,7.91,0.843,7.946,0.894,7.969,0.931,7.986,0.99,8.0,0.931,7.986,-0.99,8.0,-0.931,7.986,-0.894,7.969,-0.843,7.946,-0.805,7.91,-0.797,7.867,-0.794,7.834,-0.778,7.793,-0.76,7.747,-0.743,7.701,-0.721,7.655,-0.691,7.609,-0.648,7.563,-0.595,7.516,-0.544,7.472,-0.509,7.43,-0.492,7.39,-0.485,7.35,-0.481,7.311,-0.479,7.271,-0.48,7.232,-0.486,7.193,-0.5,7.155,-0.525,7.118,-0.56,7.081,-0.594,7.043,-0.626,7.005,-0.659,6.967,-0.692,6.928,-0.722,6.889,-0.745,6.849,-0.756,6.808,-0.756,6.766,-0.751,6.723,-0.749,6.681,-0.752,6.639,-0.759,6.598,-0.768,6.556,-0.776,6.514,-0.781,6.473,-0.784,6.431,-0.784,6.389,-0.783,6.348,-0.783,6.306,-0.786,6.265,-0.792,6.224,-0.798,6.183,-0.804,6.142,-0.81,6.101,-0.814,6.06,-0.812,6.019,-0.807,5.978,-0.801,5.937,-0.797,5.896,-0.798,5.856,-0.801,5.817,-0.8,5.779,-0.795,5.74,-0.784,5.699,-0.768,5.656,-0.748,5.613,-0.73,5.571,-0.713,5.53,-0.697,5.489,-0.682,5.449,-0.669,5.407,-0.663,5.367,-0.666,5.328,-0.681,5.291,-0.7,5.254,-0.71,5.214,-0.703,5.173,-0.685,5.133,-0.661,5.091,-0.637,5.051,-0.618,5.011,-0.607,4.972,-0.601,4.934,-0.603,4.897,-0.613,4.861,-0.629,4.824,-0.648,4.788,-0.672,4.753,-0.702,4.717,-0.733,4.682,-0.755,4.656,-0.763,4.638,-0.764,4.619,-0.767,4.59,-0.779,4.558,-0.795,4.527,-0.809,4.495,-0.823,4.463,-0.838,4.431,-0.857,4.399,-0.881,4.367,-0.911,4.336,-0.948,4.306,-0.992,4.278,-1.041,4.251,-1.091,4.224,-1.138,4.197,-1.183,4.169,-1.224,4.139,-1.259,4.107,-1.287,4.071,-1.304,4.033,-1.311,3.993,-1.308,3.949,-1.296,3.906,-1.281,3.862,-1.264,3.819,-1.245,3.775,-1.225,3.731,-1.208,3.687,-1.193,3.644,-1.179,3.603,-1.17,3.561,-1.164,3.52,-1.158,3.479,-1.147,3.438,-1.131,3.395,-1.115,3.353,-1.098,3.312,-1.078,3.273,-1.055,3.234,-1.026,3.194,-0.992,3.156,-0.956,3.119,-0.918,3.082,-0.874,3.044,-0.822,3.008,-0.766,2.974,-0.71,2.941,-0.655,2.909,-0.608,2.878,-0.579,2.851,-0.564,2.829,-0.553,2.804,-0.556,2.779,-0.587,2.755,-0.63,2.727,-0.661,2.693,-0.668,2.661,-0.672,2.637,-0.696,2.618,-0.742,2.604,-0.804,2.591,-0.87,2.574,-0.93,2.551,-0.979,2.519,-1.008,2.49,-1.031,2.459,-1.049,2.426,-1.061,2.392,-1.065,2.356,-1.06,2.319,-1.052,2.282,-1.048,2.245,-1.047,2.209,-1.044,2.173,-1.038,2.137,-1.028,2.1,-1.012,2.062,-0.991,2.022,-0.967,1.982,-0.94,1.942,-0.91,1.901,-0.874,1.856,-0.831,1.809,-0.782,1.76,-0.731,1.711,-0.679,1.662,-0.628,1.613,-0.578,1.565,-0.531,1.52,-0.483,1.474,-0.438,1.429,-0.399,1.387,-0.366,1.35,-0.338,1.319,-0.32,1.296,-0.314,1.283,-0.322,1.278,-0.343,1.272,-0.367,1.26,-0.382,1.247,-0.389,1.232,-0.384,1.214,-0.368,1.19,-0.348,1.162,-0.33,1.133,-0.317,1.108,-0.313,1.085,-0.314,1.064,-0.321,1.046,-0.336,1.03,-0.361,1.018,-0.395,1.008,-0.423,0.996,-0.444,0.984,-0.463,0.968,-0.481,0.945,-0.493,0.917,-0.494,0.896,-0.494,0.879,-0.503,0.852,-0.52,0.808,-0.539,0.747,-0.554,0.683,-0.563,0.614,-0.564,0.541,-0.556,0.436,-0.521,0.335,-0.468,0.241,-0.398,0.157,-0.311,0.089,-0.212,0.042,-0.105,0.013,0.007,0.005],"l":{"crown":[0.0066,0.005],"head_peak":[0.5634,0.6146],"chin":[0.3203,1.2438],"neck_valley":[0.3302,1.2595],"trapezius_peak":[1.035,2.2022],"shoulder_peak":[1.0651,2.2926],"chest_inflection":[0.6609,2.5468],"armpit_valley":[0.6809,2.5981],"waist_valley":[0.5523,2.7034],"navel_estimate":[0.9007,3.2911],"hip_peak":[1.311,3.9567],"mid_thigh":[0.7876,4.6166],"thigh_narrowing":[0.7635,4.8003],"knee_valley":[0.6007,5.2765],"calf_peak":[0.7967,6.0967],"mid_shin":[0.7811,6.329],"ankle_valley":[0.4776,7.3815],"boot_top":[0.9903,7.9093],"sole":[0.7497,8.0001]}};
+
+// ===================================================================
+// PARSE
+// ===================================================================
+function parseContour(flat) {
+  const pts = [];
+  for (let i = 0; i < flat.length; i += 2) pts.push([flat[i], flat[i+1]]);
+  return pts;
+}
+let contour = parseContour(D.c);
+let LM = D.l; // landmark dict: name -> [dx, dy]
+
+// ===================================================================
+// BONE SYSTEM — Forward Kinematics with 2D affine matrices
+// ===================================================================
+// Bone hierarchy:
+//   root (waist) ─┬─ spine (shoulder) ── neck ── head (crown)
+//                  └─ pelvis (hip) ── thigh (knee) ── shank (ankle) ── foot (sole)
+
+let BONE_DEFS = [
+  { name: 'root',    jy: LM.waist_valley[1],    parent: -1 },   // 0
+  { name: 'spine',   jy: LM.shoulder_peak[1],    parent: 0  },   // 1
+  { name: 'neck',    jy: LM.neck_valley[1],      parent: 1  },   // 2
+  { name: 'head',    jy: LM.crown[1],            parent: 2  },   // 3
+  { name: 'pelvis',  jy: LM.hip_peak[1],         parent: 0  },   // 4
+  { name: 'thigh',   jy: LM.knee_valley[1],      parent: 4  },   // 5
+  { name: 'shank',   jy: LM.ankle_valley[1],     parent: 5  },   // 6
+  { name: 'foot',    jy: LM.sole[1],             parent: 6  },   // 7
+];
+
+// Bone runtime state
+let bones = BONE_DEFS.map(d => ({
+  ...d,
+  angle: 0,
+  // World matrix [a, b, tx, c, d, ty] for 2D affine
+  wm: [1,0,0, 0,1,0],
+  // World-space joint position
+  wj: [0, d.jy],
+}));
+
+// Index lookup
+let BI = {};
+bones.forEach((b,i) => BI[b.name] = i);
+
+// --- Matrix utilities ---
+function matIdent() { return [1,0,0, 0,1,0]; }
+function matMul(A, B) {
+  return [
+    A[0]*B[0]+A[1]*B[3], A[0]*B[1]+A[1]*B[4], A[0]*B[2]+A[1]*B[5]+A[2],
+    A[3]*B[0]+A[4]*B[3], A[3]*B[1]+A[4]*B[4], A[3]*B[2]+A[4]*B[5]+A[5],
+  ];
+}
+function matRot(a) { const c=Math.cos(a),s=Math.sin(a); return [c,-s,0, s,c,0]; }
+function matTrans(tx,ty) { return [1,0,tx, 0,1,ty]; }
+function matRotAround(cx,cy,a) {
+  return matMul(matTrans(cx,cy), matMul(matRot(a), matTrans(-cx,-cy)));
+}
+function matXform(m,x,y) { return [m[0]*x+m[1]*y+m[2], m[3]*x+m[4]*y+m[5]]; }
+
+// --- Forward kinematics ---
+function updateBones() {
+  for (let i = 0; i < bones.length; i++) {
+    const b = bones[i];
+    if (b.parent < 0) {
+      b.wm = matRotAround(0, b.jy, b.angle);
+      b.wj = matXform(b.wm, 0, b.jy);
+    } else {
+      const p = bones[b.parent];
+      // Transform rest joint through parent's world matrix
+      b.wj = matXform(p.wm, 0, b.jy);
+      // Local rotation around the world-space joint
+      const localRot = matRotAround(b.wj[0], b.wj[1], b.angle);
+      b.wm = matMul(localRot, p.wm);
+    }
+  }
+}
+
+// ===================================================================
+// SKINNING — assign each vertex to a bone chain based on dy
+// ===================================================================
+// For a point at dy, return the index of the deepest influencing bone.
+// Upper body: root(2.70) → spine(2.29) → neck(1.26) → head(0.005)
+// Lower body: root(2.70) → pelvis(3.96) → thigh(5.28) → shank(7.38) → foot(8.0)
+
+function getBoneIdx(dy) {
+  if (dy <= LM.crown[1] + 0.01) return BI.head;
+  if (dy <= LM.neck_valley[1])  return BI.head;
+  if (dy <= LM.shoulder_peak[1]) return BI.neck;
+  if (dy <= LM.waist_valley[1]) return BI.spine;
+  if (dy <= LM.hip_peak[1])    return BI.root;
+  if (dy <= LM.knee_valley[1]) return BI.pelvis;
+  if (dy <= LM.ankle_valley[1]) return BI.thigh;
+  return BI.shank;
+}
+
+// Smooth blending: for each vertex, compute 1-2 bone weights
+const BLEND_HU = 0.35;
+function getWeights(dy) {
+  // Joint boundaries ordered by dy
+  const joints = [
+    [LM.crown[1],         BI.head],
+    [LM.neck_valley[1],   BI.neck],
+    [LM.shoulder_peak[1], BI.spine],
+    [LM.waist_valley[1],  BI.root],
+    [LM.hip_peak[1],      BI.pelvis],
+    [LM.knee_valley[1],   BI.thigh],
+    [LM.ankle_valley[1],  BI.shank],
+    [LM.sole[1],          BI.foot],
+  ];
+
+  // Find which zone the point is in
+  for (let i = 0; i < joints.length - 1; i++) {
+    const [jy0, bi0] = joints[i];
+    const [jy1, bi1] = joints[i + 1];
+    if (dy >= jy0 && dy <= jy1) {
+      const dist_to_lower = jy1 - dy;
+      const dist_to_upper = dy - jy0;
+
+      // Pure zone — no blending needed
+      if (dist_to_lower > BLEND_HU && dist_to_upper > BLEND_HU) {
+        return [[bi0, 1.0]];
+      }
+      // Near lower boundary — blend with next zone's bone
+      if (dist_to_lower <= BLEND_HU && i + 1 < joints.length - 1) {
+        const t = dist_to_lower / BLEND_HU;
+        const smooth = t * t * (3 - 2 * t); // smoothstep
+        return [[bi0, smooth], [bi1, 1 - smooth]];
+      }
+      // Near upper boundary — blend with this zone's bone
+      if (dist_to_upper <= BLEND_HU && i > 0) {
+        const t = dist_to_upper / BLEND_HU;
+        const smooth = t * t * (3 - 2 * t);
+        const [_, biPrev] = joints[i - 1];
+        return [[bi0, smooth], [biPrev, 1 - smooth]];
+      }
+      return [[bi0, 1.0]];
+    }
+  }
+  return [[BI.root, 1.0]];
+}
+
+// Pre-compute weights for all contour vertices
+let vertexWeights = contour.map(p => getWeights(p[1]));
+
+// ===================================================================
+// DEFORMATION — Linear Blend Skinning
+// ===================================================================
+function deformPoint(px, py, weights) {
+  let rx = 0, ry = 0;
+  for (const [bi, w] of weights) {
+    const [tx, ty] = matXform(bones[bi].wm, px, py);
+    rx += w * tx;
+    ry += w * ty;
+  }
+  return [rx, ry];
+}
+
+function deformContour() {
+  return contour.map((p, i) => deformPoint(p[0], p[1], vertexWeights[i]));
+}
+
+// ===================================================================
+// ANIMATION PRESETS
+// ===================================================================
+const PI = Math.PI;
+const PRESETS = {
+  idle: (t) => {
+    const b = Math.sin(t * 1.8) * 0.008;
+    return {
+      root: 0, spine: b, neck: b * 0.7,
+      head: Math.sin(t * 2.4) * 0.006,
+      pelvis: 0, thigh: 0, shank: 0, foot: 0
+    };
+  },
+  breathe: (t) => {
+    const phase = Math.sin(t * 1.0);
+    return {
+      root: phase * 0.005, spine: phase * 0.018,
+      neck: phase * 0.012, head: Math.sin(t * 1.5) * 0.008,
+      pelvis: phase * -0.003, thigh: 0, shank: 0, foot: 0
+    };
+  },
+  sway: (t) => ({
+    root:   Math.sin(t * 0.7) * 0.045,
+    spine:  Math.sin(t * 0.7 + 0.4) * -0.025,
+    neck:   Math.sin(t * 0.7 + 0.7) * -0.018,
+    head:   Math.sin(t * 1.1) * 0.012,
+    pelvis: Math.sin(t * 0.7) * -0.02,
+    thigh:  Math.sin(t * 0.7 + 0.3) * 0.01,
+    shank: 0, foot: 0
+  }),
+  contrapposto: (t) => {
+    const s = Math.sin(t * 0.5);
+    const side = s > 0 ? 1 : -1;
+    const ease = Math.abs(s);
+    return {
+      root:   side * ease * 0.04,
+      spine:  side * ease * -0.035,
+      neck:   side * ease * -0.02,
+      head:   side * ease * 0.015,
+      pelvis: side * ease * -0.025,
+      thigh:  side * ease * 0.015,
+      shank:  side * ease * -0.008,
+      foot: 0
+    };
+  },
+  squat: (t) => {
+    const phase = (Math.sin(t * 0.6) + 1) / 2;
+    const e = phase * phase * (3 - 2 * phase);
+    return {
+      root:   e * 0.04,  spine: e * -0.03,
+      neck:   e * -0.02, head:  0,
+      pelvis: e * 0.06,  thigh: e * -0.12,
+      shank:  e * 0.1,   foot:  e * -0.02
+    };
+  },
+  march: (t) => {
+    const s = Math.sin(t * 2.5);
+    const c = Math.cos(t * 2.5);
+    return {
+      root:  Math.sin(t * 5) * 0.008,
+      spine: c * 0.015, neck: c * 0.01,
+      head:  s * 0.005,
+      pelvis: s * 0.03, thigh: s * -0.08,
+      shank:  (s > 0 ? s : 0) * 0.06,
+      foot: 0
+    };
+  },
+};
+
+let activePreset = 'idle';
+let manualOverrides = {};
+
+// ===================================================================
+// CANVAS & RENDERING
+// ===================================================================
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let W, H, scale, ox, oy;
+function resize() {
+  const panelW = 260;
+  W = canvas.width = window.innerWidth - panelW;
+  H = canvas.height = window.innerHeight;
+  // Scale: figure is ~8 HU tall, ~2.6 HU wide (mirrored)
+  const figH = 8.2, figW = 2.8;
+  scale = Math.min(H * 0.88 / figH, W * 0.85 / figW);
+  ox = W / 2;        // center X (midline at dx=0)
+  oy = H * 0.06;     // top margin
+}
+window.addEventListener('resize', resize);
+resize();
+
+function toScreen(dx, dy) {
+  return [ox + dx * scale, oy + dy * scale];
+}
+
+// Display toggles
+const display = {
+  fill: true, outline: true, skeleton: true,
+  joints: true, labels: false, com: true, grid: false,
+};
+
+function drawGrid() {
+  ctx.strokeStyle = 'rgba(40,55,100,0.12)';
+  ctx.lineWidth = 0.5;
+  for (let hu = 0; hu <= 8; hu++) {
+    const [, sy] = toScreen(0, hu);
+    ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(W, sy); ctx.stroke();
+  }
+  for (let dx = -1.5; dx <= 1.5; dx += 0.5) {
+    const [sx] = toScreen(dx, 0);
+    ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, H); ctx.stroke();
+  }
+  // HU labels
+  ctx.fillStyle = 'rgba(60,80,140,0.25)';
+  ctx.font = '9px JetBrains Mono';
+  for (let hu = 0; hu <= 8; hu++) {
+    const [sx, sy] = toScreen(-1.5, hu);
+    ctx.fillText(hu + ' HU', sx - 30, sy + 3);
+  }
+}
+
+function drawFill(pts) {
+  // Gradient fill
+  const [,y0] = toScreen(0, 0);
+  const [,y1] = toScreen(0, 8);
+  const grad = ctx.createLinearGradient(ox, y0, ox, y1);
+  grad.addColorStop(0, 'rgba(35,45,80,0.85)');
+  grad.addColorStop(0.3, 'rgba(30,40,70,0.9)');
+  grad.addColorStop(0.7, 'rgba(25,35,65,0.88)');
+  grad.addColorStop(1, 'rgba(20,30,55,0.85)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  const [sx0, sy0] = toScreen(pts[0][0], pts[0][1]);
+  ctx.moveTo(sx0, sy0);
+  for (let i = 1; i < pts.length; i++) {
+    const [sx, sy] = toScreen(pts[i][0], pts[i][1]);
+    ctx.lineTo(sx, sy);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawOutline(pts) {
+  ctx.strokeStyle = 'rgba(90,130,255,0.5)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  const [sx0, sy0] = toScreen(pts[0][0], pts[0][1]);
+  ctx.moveTo(sx0, sy0);
+  for (let i = 1; i < pts.length; i++) {
+    const [sx, sy] = toScreen(pts[i][0], pts[i][1]);
+    ctx.lineTo(sx, sy);
+  }
+  ctx.closePath();
+  ctx.stroke();
+
+  // Glow pass
+  ctx.strokeStyle = 'rgba(80,120,255,0.12)';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+}
+
+function drawSkeleton() {
+  // Draw bone segments
+  ctx.lineWidth = 2;
+  for (let i = 0; i < bones.length; i++) {
+    const b = bones[i];
+    if (b.parent < 0) continue;
+    const p = bones[b.parent];
+    const [sx1, sy1] = toScreen(p.wj[0], p.wj[1]);
+    const [sx2, sy2] = toScreen(b.wj[0], b.wj[1]);
+
+    ctx.strokeStyle = 'rgba(255,180,60,0.45)';
+    ctx.beginPath();
+    ctx.moveTo(sx1, sy1);
+    ctx.lineTo(sx2, sy2);
+    ctx.stroke();
+
+    // Glow
+    ctx.strokeStyle = 'rgba(255,160,40,0.1)';
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.lineWidth = 2;
+  }
+}
+
+function drawJoints() {
+  for (let i = 0; i < bones.length; i++) {
+    const b = bones[i];
+    const [sx, sy] = toScreen(b.wj[0], b.wj[1]);
+    const r = i === 0 ? 5 : 3.5;
+
+    // Joint circle
+    ctx.fillStyle = i === 0
+      ? 'rgba(255,100,80,0.7)'
+      : 'rgba(255,200,80,0.6)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, PI * 2);
+    ctx.fill();
+
+    // Glow
+    ctx.fillStyle = i === 0
+      ? 'rgba(255,80,60,0.15)'
+      : 'rgba(255,180,60,0.1)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 2.5, 0, PI * 2);
+    ctx.fill();
+
+    if (display.labels) {
+      ctx.fillStyle = 'rgba(200,180,140,0.5)';
+      ctx.font = '8px JetBrains Mono';
+      ctx.fillText(b.name, sx + 8, sy - 4);
+    }
+  }
+}
+
+function drawCoM() {
+  // Whole-body CoM
+  const comDy = 3.7199;
+  const [comSx, comSy] = toScreen(0, comDy);
+  const dcom = deformPoint(0, comDy, getWeights(comDy));
+  const [dcsx, dcsy] = toScreen(dcom[0], dcom[1]);
+
+  ctx.strokeStyle = 'rgba(100,255,150,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(dcsx - 6, dcsy); ctx.lineTo(dcsx + 6, dcsy);
+  ctx.moveTo(dcsx, dcsy - 6); ctx.lineTo(dcsx, dcsy + 6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(dcsx, dcsy, 4, 0, PI * 2);
+  ctx.stroke();
+}
+
+// ===================================================================
+// ANIMATION LOOP
+// ===================================================================
+let animTime = 0;
+let lastTs = 0;
+let speed = 1.0;
+let playing = true;
+
+function applyPreset(t) {
+  const fn = PRESETS[activePreset];
+  if (!fn) return;
+  const angles = fn(t);
+  for (const b of bones) {
+    if (manualOverrides[b.name] !== undefined) {
+      b.angle = manualOverrides[b.name];
+    } else {
+      b.angle = angles[b.name] || 0;
+    }
+  }
+}
+
+function render(ts) {
+  if (!lastTs) lastTs = ts;
+  const dt = (ts - lastTs) / 1000;
+  lastTs = ts;
+
+  if (playing) animTime += dt * speed;
+
+  // Apply animation
+  applyPreset(animTime);
+
+  // Forward kinematics
+  updateBones();
+
+  // Deform contour
+  const deformed = deformContour();
+
+  // Clear
+  ctx.clearRect(0, 0, W, H);
+
+  // Grid
+  if (display.grid) drawGrid();
+
+  // Fill
+  if (display.fill) drawFill(deformed);
+
+  // Outline
+  if (display.outline) drawOutline(deformed);
+
+  // Skeleton
+  if (display.skeleton) drawSkeleton();
+
+  // Joints
+  if (display.joints) drawJoints();
+
+  // CoM
+  if (display.com) drawCoM();
+
+  // Stats
+  updateStats();
+
+  requestAnimationFrame(render);
+}
+
+function updateStats() {
+  const el = document.getElementById('stats');
+  const angleStrs = bones.map(b =>
+    `<div class="stat"><span>${b.name}</span><span class="stat-v">${(b.angle * 180 / PI).toFixed(1)}°</span></div>`
+  ).join('');
+  el.innerHTML = `
+    <div class="stat"><span>vertices</span><span class="stat-v">${contour.length}</span></div>
+    <div class="stat"><span>bones</span><span class="stat-v">${bones.length}</span></div>
+    <div class="stat"><span>preset</span><span class="stat-v">${activePreset}</span></div>
+    <div class="stat"><span>time</span><span class="stat-v">${animTime.toFixed(1)}s</span></div>
+    <div style="margin-top:6px;border-top:1px solid rgba(100,120,180,0.08);padding-top:6px">
+    ${angleStrs}</div>
+  `;
+}
+
+// ===================================================================
+// UI CONTROLS
+// ===================================================================
+// Preset buttons
+const presetsEl = document.getElementById('presets');
+Object.keys(PRESETS).forEach(name => {
+  const btn = document.createElement('button');
+  btn.className = 'btn' + (name === activePreset ? ' active' : '');
+  btn.textContent = name;
+  btn.onclick = () => {
+    activePreset = name;
+    manualOverrides = {};
+    presetsEl.querySelectorAll('.btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Reset sliders
+    document.querySelectorAll('.bone-slider').forEach(sl => sl.value = 0);
+  };
+  presetsEl.appendChild(btn);
+});
+
+// Bone sliders
+const slidersEl = document.getElementById('bone-sliders');
+bones.forEach((b, i) => {
+  const row = document.createElement('div');
+  row.className = 'slider-row';
+  const lbl = document.createElement('span');
+  lbl.className = 'slider-label';
+  lbl.textContent = b.name;
+  const sl = document.createElement('input');
+  sl.type = 'range';
+  sl.className = 'bone-slider';
+  sl.min = -30; sl.max = 30; sl.value = 0; sl.step = 0.5;
+  sl.dataset.bone = b.name;
+  const val = document.createElement('span');
+  val.className = 'slider-val';
+  val.textContent = '0°';
+  sl.oninput = () => {
+    const deg = parseFloat(sl.value);
+    val.textContent = deg.toFixed(1) + '°';
+    if (Math.abs(deg) < 0.3) {
+      delete manualOverrides[b.name];
+    } else {
+      manualOverrides[b.name] = deg * PI / 180;
+    }
+  };
+  row.appendChild(lbl);
+  row.appendChild(sl);
+  row.appendChild(val);
+  slidersEl.appendChild(row);
+});
+
+// Display toggles
+const togglesEl = document.getElementById('toggles');
+Object.keys(display).forEach(key => {
+  const row = document.createElement('div');
+  row.className = 'toggle-row';
+  const dot = document.createElement('div');
+  dot.className = 'toggle-dot' + (display[key] ? ' on' : '');
+  const lbl = document.createElement('span');
+  lbl.className = 'toggle-label';
+  lbl.textContent = key;
+  row.onclick = () => {
+    display[key] = !display[key];
+    dot.classList.toggle('on');
+  };
+  row.appendChild(dot);
+  row.appendChild(lbl);
+  togglesEl.appendChild(row);
+});
+
+// Speed slider
+const speedSlider = document.getElementById('speed');
+const speedVal = document.getElementById('speed-val');
+speedSlider.oninput = () => {
+  speed = parseFloat(speedSlider.value) / 100;
+  speedVal.textContent = speed.toFixed(1) + '×';
+};
+
+// ===================================================================
+// FILE LOADING
+// ===================================================================
+function loadJsonData(json) {
+  let newContourFlat, newLM;
+
+  // v4 schema format: contour = [[dx,dy],...], landmarks = [{name,dx,dy},...]
+  if (Array.isArray(json.contour) && Array.isArray(json.landmarks)) {
+    newContourFlat = json.contour.flat();
+    newLM = {};
+    for (const lm of json.landmarks) {
+      newLM[lm.name] = [lm.dx, lm.dy];
+    }
+  }
+  // Compact format: c = flat array, l = dict
+  else if (json.c && json.l) {
+    newContourFlat = json.c;
+    newLM = json.l;
+  }
+  else {
+    throw new Error("Unrecognized format: needs 'contour'+'landmarks' or 'c'+'l'");
+  }
+
+  // Validate required landmarks for the bone system
+  const required = ['crown','neck_valley','shoulder_peak','waist_valley',
+                    'hip_peak','knee_valley','ankle_valley','sole'];
+  for (const name of required) {
+    if (!newLM[name]) throw new Error('Missing required landmark: ' + name);
+  }
+
+  // Update globals
+  contour = parseContour(newContourFlat);
+  LM = newLM;
+
+  // Rebuild bone system
+  BONE_DEFS = [
+    { name: 'root',   jy: LM.waist_valley[1],   parent: -1 },
+    { name: 'spine',  jy: LM.shoulder_peak[1],   parent: 0  },
+    { name: 'neck',   jy: LM.neck_valley[1],     parent: 1  },
+    { name: 'head',   jy: LM.crown[1],           parent: 2  },
+    { name: 'pelvis', jy: LM.hip_peak[1],        parent: 0  },
+    { name: 'thigh',  jy: LM.knee_valley[1],     parent: 4  },
+    { name: 'shank',  jy: LM.ankle_valley[1],    parent: 5  },
+    { name: 'foot',   jy: LM.sole[1],            parent: 6  },
+  ];
+  bones = BONE_DEFS.map(d => ({
+    ...d, angle: 0,
+    wm: [1,0,0, 0,1,0],
+    wj: [0, d.jy],
+  }));
+  BI = {};
+  bones.forEach((b,i) => BI[b.name] = i);
+  vertexWeights = contour.map(p => getWeights(p[1]));
+
+  // Reset animation state
+  manualOverrides = {};
+  animTime = 0;
+
+  // Rebuild bone sliders
+  slidersEl.innerHTML = '';
+  bones.forEach((b) => {
+    const row = document.createElement('div');
+    row.className = 'slider-row';
+    const lbl = document.createElement('span');
+    lbl.className = 'slider-label';
+    lbl.textContent = b.name;
+    const sl = document.createElement('input');
+    sl.type = 'range'; sl.className = 'bone-slider';
+    sl.min = -30; sl.max = 30; sl.value = 0; sl.step = 0.5;
+    sl.dataset.bone = b.name;
+    const val = document.createElement('span');
+    val.className = 'slider-val';
+    val.textContent = '0°';
+    sl.oninput = () => {
+      const deg = parseFloat(sl.value);
+      val.textContent = deg.toFixed(1) + '°';
+      if (Math.abs(deg) < 0.3) { delete manualOverrides[b.name]; }
+      else { manualOverrides[b.name] = deg * PI / 180; }
+    };
+    row.appendChild(lbl); row.appendChild(sl); row.appendChild(val);
+    slidersEl.appendChild(row);
+  });
+}
+
+const fileInput = document.getElementById('file-input');
+const loadBtn = document.getElementById('load-btn');
+const loadStatus = document.getElementById('load-status');
+
+loadBtn.onclick = () => fileInput.click();
+fileInput.onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  loadStatus.style.color = '#404860';
+  loadStatus.textContent = 'Loading…';
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const json = JSON.parse(ev.target.result);
+      loadJsonData(json);
+      loadStatus.style.color = 'rgba(100,255,150,0.6)';
+      loadStatus.textContent = file.name + ' — ' + contour.length + ' pts';
+    } catch (err) {
+      loadStatus.style.color = '#ef4444';
+      loadStatus.textContent = err.message;
+    }
+  };
+  reader.onerror = () => {
+    loadStatus.style.color = '#ef4444';
+    loadStatus.textContent = 'Failed to read file.';
+  };
+  reader.readAsText(file);
+  fileInput.value = '';
+};
+
+// Start
+requestAnimationFrame(render);
+</script>

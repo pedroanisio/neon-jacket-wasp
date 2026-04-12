@@ -20,8 +20,8 @@ disclaimer: >
 This specification defines the typed Python data model that implements
 the **silhouette_v4.schema.json** document format. The module provides:
 
-1. **Pydantic model classes** — one-to-one mapping from all 27 JSON
-   Schema sections to strict, validated Python types.
+1. **Pydantic model classes** — one-to-one mapping from all 28 required
+   JSON Schema sections (plus 1 optional) to strict, validated Python types.
 2. **PALS's Law compliance primitives** — error taxonomy enum, verification
    result/report models, and scope declarations per §5, §8.3, and §9.1.
 3. **Type aliases** — lightweight wrappers for JSON Schema `$defs`.
@@ -115,6 +115,10 @@ Derived from JSON Schema `$defs`:
 | `UnitVector2d` | `tuple[float, float]` | Unit-length direction vector |
 | `DyRange` | `tuple[float, float]` | `(dy_start, dy_end)` vertical interval |
 | `ContourVariant` | `Literal["right_half", "mirrored_full", "original"]` | Which contour representation was used |
+| `HuConvention` | `Literal["crown_to_chin", "crown_to_neck_valley", "crown_to_c7", "custom"]` | Head-unit measurement convention |
+| `SeamHandling` | `Literal["none", "blended", "windowed"]` | How mirror-seam artifacts are treated |
+| `GestureLineMethod` | `Literal["medial_axis_spline", "joint_chain_spline", "manual"]` | Gesture line fitting method |
+| `GestureCurvatureClass` | `Literal["C_curve", "S_curve", "straight", "complex"]` | Overall gesture curvature shape |
 
 
 ## 5. Strict Base Model
@@ -320,8 +324,35 @@ every section, its sub-models, fields, types, and constraints.
 **Type:** `list[Point2d]`
 **Constraint:** `min_length=3`
 
-Ordered sequence of `(dx, dy)` coordinates forming the closed silhouette
-boundary in head-unit space.
+Ordered sequence of `(dx, dy)` coordinates forming the **outer boundary**
+of the silhouette in head-unit space.
+
+**Topology:**
+
+The contour is a closed loop with a right/left split:
+
+- **Right half** (indices `0` to `split_idx`): traces the outer edge of
+  the right side from crown (minimum `dy`) to sole (maximum `dy`).  The
+  split index is the point of maximum `dy`.
+- **Left half** (indices `split_idx+1` to end): traces back from sole to
+  crown.  When `meta.mirror.applied` is `true`, the left half is the
+  mirror reflection of the right half collapsed toward the midline.
+
+The right half may contain **re-entrant loops** where the contour traces
+around separated body parts (e.g., the arm gap between arm tip and
+torso).  In these regions `dy` temporarily decreases before resuming its
+downward path.  This produces two `dx` values at the same `dy` level —
+an outer edge and an inner edge.
+
+**Interior holes** (e.g., the gap between separated legs) are **not**
+captured in the contour, because the contour traces only the outer
+perimeter of the connected body mask.  Interior separation geometry is
+stored in the multi-span `measurements.scanlines` entries — see §7.7.
+
+**Rendering note:** when mirroring the right half to produce a bilateral
+SVG path, use `fill-rule: evenodd` so that re-entrant regions (arm gaps)
+are correctly carved out.  Interior holes from `measurements.scanlines`
+must be rendered as separate sub-paths within the same SVG `<path>`.
 
 ---
 
@@ -424,6 +455,8 @@ Polyline representing the figure's vertical axis of symmetry.
 
 **`ScanlineEntry(_Strict)`**
 
+Dense scanline interpolated from the right-half contour spline.
+
 | Field | Type | Constraints |
 |---|---|---|
 | `right_dx` | `float` | required |
@@ -432,11 +465,31 @@ Polyline representing the figure's vertical axis of symmetry.
 | `d_width_d_dy` | `float \| None` | optional |
 | `curvature` | `float \| None` | optional |
 
+When the original extraction detected **multiple contour crossings** at
+a given `dy` level (e.g., separated legs or arms), the dense entry also
+carries:
+
+| Field | Type | Description |
+|---|---|---|
+| `contour_pairs` | `int` | Number of separate contour spans at this level |
+| `topology_detail` | `list[dict]` | Original per-span data from extraction |
+
+Each element of `topology_detail` has `{outer_dx, inner_dx}` describing
+one contour span.  For two separated legs at `dy=5.0`:
+
+- Span 0 (right leg): `outer_dx ≈ 0.71`, `inner_dx ≈ 0.16`
+- Span 1 (left leg): `outer_dx ≈ -0.27`, `inner_dx ≈ -0.80`
+- Gap between legs: from `inner_dx` of span 0 to `outer_dx` of span 1
+
+This multi-span data captures **interior holes** that the outer-boundary
+contour (§7.2) cannot represent.  Renderers should use it to carve out
+gaps between separated body parts.
+
 **`Measurements(_Strict)`**
 
 | Field | Type | Constraints | Notes |
 |---|---|---|---|
-| `scanlines` | `dict[str, ScanlineEntry \| list[dict[str, Any]]]` | required | Accepts legacy topology entries |
+| `scanlines` | `dict[str, ScanlineEntry \| list[dict[str, Any]]]` | required | Keyed by dy level (e.g. `"5.00"`). `list` entries are raw v2 multi-span data. |
 | `note` | `str \| None` | optional | |
 | `step_hu` | `float \| None` | `> 0` if present | |
 | `scanline_count` | `int \| None` | `>= 1` if present | |
