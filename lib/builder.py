@@ -70,7 +70,6 @@ if TYPE_CHECKING:
 
 from lib.model import (
     ALL_ERROR_CLASSES,
-    PALS_LAW_VERSION,
     AreaProfile,
     Biomechanics,
     BodyRegions,
@@ -90,9 +89,9 @@ from lib.model import (
     GestureLine,
     HairSymmetry,
     HuMoments,
-    LLMErrorClass,
     Landmark,
     LandmarkValidation,
+    LLMErrorClass,
     Measurements,
     MedialAxis,
     Meta,
@@ -177,28 +176,25 @@ def _build_verification_report(
     In lenient mode (``strict=False``), NO error classes are covered —
     this is explicit risk acceptance per PALS's Law §8.4 (Corollary 4).
     """
-    results: list[VerificationResult] = []
-
     if strict:
-        for cls, method in _COVERED_CLASSES.items():
-            results.append(
-                VerificationResult(error_class=cls, covered=True, method=method)
-            )
-        for cls, note in _UNCOVERED_CLASSES.items():
-            results.append(
-                VerificationResult(error_class=cls, covered=False, note=note)
-            )
+        results: list[VerificationResult] = [
+            VerificationResult(error_class=cls, covered=True, method=method)
+            for cls, method in _COVERED_CLASSES.items()
+        ] + [
+            VerificationResult(error_class=cls, covered=False, note=note)
+            for cls, note in _UNCOVERED_CLASSES.items()
+        ]
     else:
         # PALS's Law §8.4: Silent acceptance is an architectural defect.
         # Lenient mode explicitly declares ZERO coverage.
-        for cls in ALL_ERROR_CLASSES:
-            results.append(
-                VerificationResult(
-                    error_class=cls,
-                    covered=False,
-                    note="Lenient mode: all verification bypassed (§8.4 risk acceptance)",
-                )
+        results = [
+            VerificationResult(
+                error_class=cls,
+                covered=False,
+                note="Lenient mode: all verification bypassed (§8.4 risk acceptance)",
             )
+            for cls in ALL_ERROR_CLASSES
+        ]
 
     return VerificationReport(
         verified=results,

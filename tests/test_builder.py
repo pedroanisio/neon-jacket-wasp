@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -12,12 +11,9 @@ from lib.builder import MetaBuilder, SilhouetteBuilder, SilhouetteDocument
 from lib.model import (
     ALL_ERROR_CLASSES,
     PALS_LAW_VERSION,
-    LLMErrorClass,
     Landmark,
+    LLMErrorClass,
     Meta,
-    Stroke,
-    SilhouetteV4,
-    VerificationReport,
 )
 
 
