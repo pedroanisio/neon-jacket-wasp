@@ -1,0 +1,356 @@
+{
+  "meta": {
+    "schema_version": "4.0.0",
+    "source": "stick_to_mesh.py",
+    "pipeline": "stick \u2192 proportion \u2192 profile \u2192 contour \u2192 depth \u2192 mesh \u2192 refine",
+    "generation_method": "parametric_generalized_cylinder",
+    "coordinate_system": {
+      "x": "lateral (+ = right of midline)",
+      "y": "vertical (+ = downward, 0 = crown)",
+      "z": "anterior-posterior (+ = forward)"
+    }
+  },
+  "stick_input": {
+    "joints": [
+      {
+        "name": "crown",
+        "x": 0.0,
+        "y": 0.0,
+        "parent": null
+      },
+      {
+        "name": "head_base",
+        "x": 0.0,
+        "y": 0.9036,
+        "parent": "crown"
+      },
+      {
+        "name": "neck",
+        "x": 0.0,
+        "y": 1.1747,
+        "parent": "head_base"
+      },
+      {
+        "name": "shoulder_L",
+        "x": -1.3554,
+        "y": 1.6265,
+        "parent": "neck"
+      },
+      {
+        "name": "shoulder_R",
+        "x": 1.3554,
+        "y": 1.6265,
+        "parent": "neck"
+      },
+      {
+        "name": "spine_mid",
+        "x": 0.0,
+        "y": 3.1627,
+        "parent": "neck"
+      },
+      {
+        "name": "pelvis",
+        "x": 0.0,
+        "y": 4.0663,
+        "parent": "spine_mid"
+      },
+      {
+        "name": "knee_L",
+        "x": -0.4518,
+        "y": 5.8735,
+        "parent": "pelvis"
+      },
+      {
+        "name": "knee_R",
+        "x": 0.4518,
+        "y": 5.8735,
+        "parent": "pelvis"
+      },
+      {
+        "name": "ankle_L",
+        "x": -0.4518,
+        "y": 7.5,
+        "parent": "knee_L"
+      },
+      {
+        "name": "ankle_R",
+        "x": 0.4518,
+        "y": 7.5,
+        "parent": "knee_R"
+      }
+    ]
+  },
+  "proportion": {
+    "head_height_hu": 0.9036,
+    "total_height_hu": 7.5,
+    "head_count": 8.3,
+    "segment_lengths": {
+      "crown\u2192head_base": 0.9036,
+      "head_base\u2192neck": 0.2711,
+      "neck\u2192shoulder_L": 1.4287,
+      "neck\u2192shoulder_R": 1.4287,
+      "neck\u2192spine_mid": 1.988,
+      "spine_mid\u2192pelvis": 0.9036,
+      "pelvis\u2192knee_L": 1.8628,
+      "pelvis\u2192knee_R": 1.8628,
+      "knee_L\u2192ankle_L": 1.6265,
+      "knee_R\u2192ankle_R": 1.6265
+    }
+  },
+  "width_profile": {
+    "sample_count": 14,
+    "samples": [
+      {
+        "dy": 0.0,
+        "dx": 0.0
+      },
+      {
+        "dy": 0.3,
+        "dx": 0.2982
+      },
+      {
+        "dy": 0.9,
+        "dx": 0.2259
+      },
+      {
+        "dy": 1.1625,
+        "dx": 0.1355
+      },
+      {
+        "dy": 1.65,
+        "dx": 0.8584
+      },
+      {
+        "dy": 2.25,
+        "dx": 0.5873
+      },
+      {
+        "dy": 2.85,
+        "dx": 0.4066
+      },
+      {
+        "dy": 3.75,
+        "dx": 0.6777
+      },
+      {
+        "dy": 4.5,
+        "dx": 0.3614
+      },
+      {
+        "dy": 5.25,
+        "dx": 0.253
+      },
+      {
+        "dy": 5.775,
+        "dx": 0.2711
+      },
+      {
+        "dy": 6.525,
+        "dx": 0.1265
+      },
+      {
+        "dy": 7.05,
+        "dx": 0.1807
+      },
+      {
+        "dy": 7.5,
+        "dx": 0.1355
+      }
+    ]
+  },
+  "depth_profile": {
+    "sample_count": 14,
+    "samples": [
+      {
+        "dy": 0.0,
+        "dz": 0.0
+      },
+      {
+        "dy": 0.3,
+        "dz": 0.328
+      },
+      {
+        "dy": 0.9,
+        "dz": 0.2146
+      },
+      {
+        "dy": 1.1625,
+        "dz": 0.122
+      },
+      {
+        "dy": 1.65,
+        "dz": 0.3863
+      },
+      {
+        "dy": 2.25,
+        "dz": 0.4699
+      },
+      {
+        "dy": 2.85,
+        "dz": 0.305
+      },
+      {
+        "dy": 3.75,
+        "dz": 0.4405
+      },
+      {
+        "dy": 4.5,
+        "dz": 0.3253
+      },
+      {
+        "dy": 5.25,
+        "dz": 0.2151
+      },
+      {
+        "dy": 5.775,
+        "dz": 0.2033
+      },
+      {
+        "dy": 6.525,
+        "dz": 0.1075
+      },
+      {
+        "dy": 7.05,
+        "dz": 0.0723
+      },
+      {
+        "dy": 7.5,
+        "dz": 0.0407
+      }
+    ]
+  },
+  "mesh": {
+    "n_vertices": 1922,
+    "n_faces": 3840,
+    "is_watertight": true,
+    "bounding_box": {
+      "min": [
+        -0.8838,
+        0.0115,
+        -0.482
+      ],
+      "max": [
+        0.8838,
+        7.4885,
+        0.482
+      ]
+    }
+  },
+  "pipeline_rewards": {
+    "proportion": -0.8,
+    "width_profile": -0.2066,
+    "contour": -94.686439,
+    "depth": -0.049224,
+    "mesh": 0.322947,
+    "refine": 0.666711
+  },
+  "pipeline_info": {
+    "proportion": {
+      "head_height_hu": 0.9036,
+      "head_count": 8.3,
+      "segments": {
+        "crown\u2192head_base": 0.9036,
+        "head_base\u2192neck": 0.2711,
+        "neck\u2192shoulder_L": 1.4287,
+        "neck\u2192shoulder_R": 1.4287,
+        "neck\u2192spine_mid": 1.988,
+        "spine_mid\u2192pelvis": 0.9036,
+        "pelvis\u2192knee_L": 1.8628,
+        "pelvis\u2192knee_R": 1.8628,
+        "knee_L\u2192ankle_L": 1.6265,
+        "knee_R\u2192ankle_R": 1.6265
+      }
+    },
+    "width_profile": {
+      "n_samples": 14,
+      "max_width": 0.8584,
+      "min_width": 0.1265
+    },
+    "contour": {
+      "contour_points": 800,
+      "right_points": 400
+    },
+    "depth": {
+      "mean_depth_ratio": 0.775,
+      "max_dz": 0.4699
+    },
+    "mesh": {
+      "n_vertices": 1922,
+      "n_faces": 3840,
+      "n_rings": 60,
+      "ring_resolution": 32,
+      "is_watertight": true
+    },
+    "refine": {
+      "iterations": 3,
+      "lambda": 0.3,
+      "quality_history": [
+        0.6667,
+        0.6667,
+        0.6667
+      ],
+      "converged": true
+    }
+  },
+  "rl_architecture": {
+    "note": "Each stage has observe/act/step interface. Default policies are heuristic. To train with RL: (1) collect trajectories using heuristic policies, (2) define target rewards, (3) train neural network policies using PPO/SAC/REINFORCE, (4) replace heuristic act() with learned act().",
+    "stages": [
+      {
+        "name": "proportion",
+        "action_dim": 3,
+        "observation_dim": 2,
+        "policy": "heuristic_loomis_female",
+        "rl_ready": true
+      },
+      {
+        "name": "width_profile",
+        "action_dim": 14,
+        "observation_dim": 3,
+        "policy": "heuristic_loomis_female",
+        "rl_ready": true
+      },
+      {
+        "name": "contour",
+        "action_dim": 3,
+        "observation_dim": 3,
+        "policy": "heuristic_400pts_smooth",
+        "rl_ready": true
+      },
+      {
+        "name": "depth",
+        "action_dim": 14,
+        "observation_dim": 2,
+        "policy": "heuristic_anthropometric_ratios",
+        "rl_ready": true,
+        "caveat": "Most ambiguous stage \u2014 single frontal view provides no depth"
+      },
+      {
+        "name": "mesh",
+        "action_dim": 2,
+        "observation_dim": 3,
+        "policy": "heuristic_32ring_3cap",
+        "rl_ready": true
+      },
+      {
+        "name": "refine",
+        "action_dim": 2,
+        "observation_dim": 2,
+        "policy": "heuristic_3iter_03lambda",
+        "rl_ready": true,
+        "is_recursive": true,
+        "contraction_factor": "\u2248 1 - \u03bb \u2248 0.7"
+      }
+    ],
+    "training_requirements": {
+      "corpus": "Paired (stick_figure, ground_truth_mesh) examples",
+      "reward_signals": [
+        "silhouette_reprojection_iou",
+        "mesh_quality_aspect_ratio",
+        "anatomical_plausibility",
+        "surface_smoothness"
+      ],
+      "suggested_algorithm": "PPO (handles mixed continuous/discrete actions)",
+      "estimated_training_samples": "1000-10000 pairs per stage"
+    }
+  }
+}
