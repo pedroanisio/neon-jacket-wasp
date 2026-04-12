@@ -375,26 +375,11 @@ function drawFill(pts) {
   }
   ctx.closePath();
 
-  // Add interior hole sub-paths from multi-span scanline data.
-  // These carve out gaps between separated body parts (e.g. legs).
-  if (window._holePolygons) {
-    for (const hole of window._holePolygons) {
-      // Right edge of gap (going down)
-      const [hx0, hy0] = toScreen(hole[0].gapRight, hole[0].dy);
-      ctx.moveTo(hx0, hy0);
-      for (let i = 1; i < hole.length; i++) {
-        const [hx, hy] = toScreen(hole[i].gapRight, hole[i].dy);
-        ctx.lineTo(hx, hy);
-      }
-      // Left edge of gap (going back up)
-      for (let i = hole.length - 1; i >= 0; i--) {
-        const [hx, hy] = toScreen(hole[i].gapLeft, hole[i].dy);
-        ctx.lineTo(hx, hy);
-      }
-      ctx.closePath();
-    }
-  }
-
+  // NOTE: Interior hole sub-paths (leg gap) are NOT rendered here because
+  // the hole coordinates are in static HU space and cannot follow bone
+  // deformation.  The evenodd fill rule handles the arm-gap re-entrant
+  // correctly.  Rendering separated legs requires the extraction pipeline
+  // to emit separate leg contour paths that can be bone-deformed.
   ctx.fill("evenodd");
 }
 
@@ -475,7 +460,7 @@ function drawCoM() {
   // Whole-body CoM
   const comDy = 3.7199;
   const [comSx, comSy] = toScreen(0, comDy);
-  const dcom = deformPoint(0, comDy, getWeights(comDy));
+  const dcom = deformPoint(0, comDy, getWeights(0, comDy));
   const [dcsx, dcsy] = toScreen(dcom[0], dcom[1]);
 
   ctx.strokeStyle = 'rgba(100,255,150,0.4)';
