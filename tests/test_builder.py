@@ -8,12 +8,23 @@ from pathlib import Path
 import pytest
 
 from lib.builder import MetaBuilder, SilhouetteBuilder, SilhouetteDocument
+from pydantic import ValidationError
+
 from lib.model import (
     ALL_ERROR_CLASSES,
-    PALS_LAW_VERSION,
+    BioSegment,
+    Biomechanics,
+    Compactness,
+    ContourVariant,
+    ConvexHull,
+    FractalDimension,
     Landmark,
     LLMErrorClass,
     Meta,
+    PALS_LAW_VERSION,
+    Rectangularity,
+    SegmentEndpointConvention,
+    TurningFunction,
 )
 
 
@@ -410,7 +421,7 @@ class TestMetaBuilder:
             })
             .sections({"total_sections": 1, "sections": ["meta"]})
         )
-        from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             builder.build()
 
@@ -472,7 +483,7 @@ class TestSilhouetteBuilder:
 
     def test_invalid_data_raises_at_set_time(self):
         builder = SilhouetteBuilder()
-        from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             # Missing required fields
             builder.symmetry({})
@@ -572,7 +583,7 @@ class TestSilhouetteDocument:
         d["width_profile"]["samples"][0]["full_width"] = -1.0
 
         # Strict should fail
-        from pydantic import ValidationError
+
         with pytest.raises(ValidationError):
             SilhouetteDocument.from_dict(d, strict=True)
 
@@ -744,3 +755,208 @@ class TestPALSLawCompliance:
         # but verification_report() re-validates and captures errors.
         assert len(report.schema_errors) > 0
         assert report.passed is False
+
+
+# ═══════════════════════════════════════════════════════════
+# P1 Regression tests — review audit fixes
+# ═══════════════════════════════════════════════════════════
+
+
+class TestP1FractalDimension:
+    """P1-1: fractal_dimension.value must be in [1, 2]."""
+
+    def test_valid_dimension(self):
+        fd = FractalDimension(value=1.2, method="box_counting")
+        assert fd.value == 1.2
+
+    def test_rejects_below_one(self):
+        with pytest.raises(ValidationError, match="greater_than_equal"):
+            FractalDimension(value=0.95, method="box_counting")
+
+    def test_rejects_above_two(self):
+        with pytest.raises(ValidationError, match="less_than_equal"):
+            FractalDimension(value=2.1, method="box_counting")
+
+    def test_boundary_one(self):
+        fd = FractalDimension(value=1.0, method="box_counting")
+        assert fd.value == 1.0
+
+    def test_boundary_two(self):
+        fd = FractalDimension(value=2.0, method="box_counting")
+        assert fd.value == 2.0
+
+
+class TestP1Compactness:
+    """P1-2: Compactness must include perimeter traceability fields."""
+
+    def test_basic_compactness(self):
+        c = Compactness(value=0.7)
+        assert c.perimeter_used is None
+
+    def test_with_traceability(self):
+        c = Compactness(
+            value=0.33,
+            formula="4π·A / P²",
+            perimeter_used="original",
+            computed_area_hu2=12.39,
+            computed_perimeter_hu=21.81,
+        )
+        assert c.perimeter_used == "original"
+        assert c.computed_area_hu2 == 12.39
+        assert c.computed_perimeter_hu == 21.81
+
+    def test_perimeter_used_enum_values(self):
+        for variant in ("right_half", "mirrored_full", "original"):
+            c = Compactness(value=0.5, perimeter_used=variant)
+            assert c.perimeter_used == variant
+
+    def test_rejects_invalid_perimeter_used(self):
+        with pytest.raises(ValidationError):
+            Compactness(value=0.5, perimeter_used="invalid")
+
+
+class TestP1TurningFunction:
+    """P1-3: TurningFunction must declare computed_on contour variant."""
+
+    def test_computed_on_field_exists(self):
+        tf = TurningFunction(
+            total_angle_rad=6.28,
+            winding_number=1.0,
+            sample_count=2,
+            samples=[{"s": 0.0, "theta": 0.0}, {"s": 1.0, "theta": 6.28}],
+            computed_on="mirrored_full",
+        )
+        assert tf.computed_on == "mirrored_full"
+
+    def test_computed_on_optional_for_backward_compat(self):
+        tf = TurningFunction(
+            total_angle_rad=6.28,
+            winding_number=1.0,
+            sample_count=2,
+            samples=[{"s": 0.0, "theta": 0.0}, {"s": 1.0, "theta": 6.28}],
+        )
+        assert tf.computed_on is None
+
+    def test_rejects_invalid_computed_on(self):
+        with pytest.raises(ValidationError):
+            TurningFunction(
+                total_angle_rad=6.28,
+                winding_number=1.0,
+                sample_count=2,
+                samples=[{"s": 0.0, "theta": 0.0}, {"s": 1.0, "theta": 6.28}],
+                computed_on="invalid_variant",
+            )
+
+
+class TestP1ConvexHull:
+    """P1-4: ConvexHull must cite Gonzalez-Woods for area-ratio solidity."""
+
+    def test_solidity_formula_field(self):
+        ch = ConvexHull(
+            hull_area_hu2=1.2,
+            silhouette_area_hu2=0.85,
+            solidity=0.708,
+            convexity_deficiency=0.292,
+            solidity_formula="A_shape / A_hull",
+        )
+        assert ch.solidity_formula == "A_shape / A_hull"
+
+    def test_solidity_formula_optional(self):
+        ch = ConvexHull(
+            hull_area_hu2=1.0,
+            silhouette_area_hu2=0.8,
+            solidity=0.8,
+            convexity_deficiency=0.2,
+        )
+        assert ch.solidity_formula is None
+
+
+class TestP1Biomechanics:
+    """P1-5: Biomechanics endpoint convention and corrected CoM."""
+
+    def test_endpoint_convention_field(self):
+        bio = Biomechanics(
+            gender_data="female",
+            segments=[{
+                "segment": "head_neck",
+                "mass_fraction": 0.0681,
+                "com_proximal_fraction": 0.50,
+                "rog_com_fraction": 0.495,
+                "rog_proximal_fraction": 0.495,
+                "proximal_landmark": "crown",
+                "distal_landmark": "neck_valley",
+            }],
+            endpoint_convention={
+                "source": "schema_landmarks",
+                "note": "Endpoints use schema landmark names.",
+            },
+        )
+        assert bio.endpoint_convention is not None
+        assert bio.endpoint_convention.source == "schema_landmarks"
+
+    def test_segment_landmark_fields(self):
+        seg = BioSegment(
+            segment="head_neck",
+            mass_fraction=0.068,
+            com_proximal_fraction=0.50,
+            rog_com_fraction=0.5,
+            rog_proximal_fraction=0.5,
+            proximal_landmark="crown",
+            distal_landmark="neck_valley",
+        )
+        assert seg.proximal_landmark == "crown"
+        assert seg.distal_landmark == "neck_valley"
+
+    def test_head_neck_com_not_1_0(self):
+        """The corrected head_neck CoM should be ~0.50, not 1.0."""
+        seg = BioSegment(
+            segment="head_neck",
+            mass_fraction=0.068,
+            com_proximal_fraction=0.5002,
+            rog_com_fraction=0.495,
+            rog_proximal_fraction=0.495,
+        )
+        assert seg.com_proximal_fraction < 0.6, (
+            "head_neck CoM should be ~0.50 for crown→neck_valley, not 1.0"
+        )
+
+    def test_female_reference_includes_de_leva(self):
+        """Female BSP data must cite de Leva (1996)."""
+        bio = Biomechanics(
+            gender_data="female",
+            segments=[{
+                "segment": "head_neck",
+                "mass_fraction": 0.068,
+                "com_proximal_fraction": 0.50,
+                "rog_com_fraction": 0.5,
+                "rog_proximal_fraction": 0.5,
+            }],
+            reference=[
+                "de Leva, P. 'Adjustments to Zatsiorsky-Seluyanov's segment inertia parameters.' J. Biomech. 29(9):1223–1230, 1996.",
+                "Winter, D.A. 'Biomechanics and Motor Control of Human Movement.' 4th ed., Wiley, 2009.",
+            ],
+        )
+        refs = bio.reference
+        assert isinstance(refs, list)
+        assert any("de Leva" in r for r in refs)
+
+
+class TestP1Rectangularity:
+    """P1-2b: Rectangularity must stay in [0, 1]."""
+
+    def test_valid_rectangularity(self):
+        r = Rectangularity(value=0.8)
+        assert r.value == 0.8
+
+    def test_rejects_above_one(self):
+        with pytest.raises(ValidationError, match="less_than_equal"):
+            Rectangularity(value=1.17)
+
+
+class TestContourVariantType:
+    """Verify the ContourVariant type alias works across models."""
+
+    def test_all_variants_accepted(self):
+        for v in ("right_half", "mirrored_full", "original"):
+            c = Compactness(value=0.5, perimeter_used=v)
+            assert c.perimeter_used == v

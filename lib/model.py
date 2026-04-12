@@ -159,10 +159,20 @@ class Mirror(_Strict):
     description: str | None = None
 
 
+HuConvention = Literal[
+    "crown_to_chin",
+    "crown_to_neck_valley",
+    "crown_to_c7",
+    "custom",
+]
+
+
 class CoordinateSystem(_Strict):
     dx: str
     dy: str
     hu_definition: str
+    hu_convention: HuConvention | None = None
+    hu_to_standard_factor: float | None = Field(None, gt=0)
 
 
 class ExtractionScores(_Strict):
@@ -582,6 +592,7 @@ class Curvature(_Strict):
     sample_count: int = Field(ge=1)
     samples: list[CurvatureSample]
     note: str | None = None
+    computed_on: ContourVariant | None = None
     extrema: CurvatureExtrema | None = None
     inflections: CurvatureInflections | None = None
 
@@ -647,6 +658,8 @@ class FourierDescriptors(_Strict):
     perimeter_hu: float = Field(ge=0)
     coefficients: list[FourierCoefficient]
     note: str | None = None
+    computed_on: ContourVariant | None = None
+    amplitude_formula: str | None = None
     energy_concentration: EnergyConcentration | None = None
 
 
@@ -750,6 +763,7 @@ class ContourNormals(_Strict):
     full_point_count: int = Field(ge=1)
     samples: list[NormalSample]
     note: str | None = None
+    computed_on: ContourVariant | None = None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -782,7 +796,7 @@ class HuMoments(_Strict):
     centroid: DxDy
     note: str | None = None
     reference: str | None = None
-    computed_on: str | None = None
+    computed_on: ContourVariant | None = None
     point_count: int | None = Field(None, ge=1)
 
 
@@ -935,6 +949,7 @@ class CurvatureScaleSpace(_Strict):
     scales: list[CSSScale] = Field(min_length=1)
     note: str | None = None
     reference: str | None = None
+    computed_on: ContourVariant | None = None
     persistent_features: PersistentFeatures | None = None
 
 
@@ -967,6 +982,7 @@ class StyleDeviation(_Strict):
     reference: str | None = None
     figure_head_count: float | None = None
     canon_head_count: float | None = None
+    normalized_to_standard_hu: bool | None = None
     width_deviations: list[WidthDeviation] | None = None
     interpretation: str | None = None
 
@@ -1149,6 +1165,7 @@ class ShapeComplexity(_Strict):
     eccentricity: Eccentricity
     note: str | None = None
     reference: str | None = None
+    computed_on: ContourVariant | None = None
     rectangularity: Rectangularity | None = None
     roughness: Roughness | None = None
 

@@ -420,6 +420,7 @@ def phase_04_curvature_profile(data, rdy_sorted, rdx_sorted):
             "negative κ = contour curves leftward (concave indent). "
             "Computed on Savitzky-Golay smoothed contour (window=15, order=3)."
         ),
+        "computed_on": "right_half",
         "sample_count": len(samples),
         "samples": samples,
         "extrema": {
@@ -699,6 +700,8 @@ def phase_10_fourier_descriptors(data, right_dx, right_dy):
             "Elliptic Fourier Descriptors (EFD) of the right-side contour. "
             "12 harmonics capture the shape signature from coarse to fine."
         ),
+        "computed_on": "right_half",
+        "amplitude_formula": "frobenius_norm: sqrt(a_x^2 + b_x^2 + a_y^2 + b_y^2)",
         "n_harmonics": n_harmonics,
         "perimeter_hu": round(float(T), 4),
         "coefficients": coeffs,
@@ -1032,6 +1035,7 @@ def phase_17_contour_normals(data, right_dx, right_dy):
         "sample_count": len(samples),
         "full_point_count": len(pts),
         "samples": samples,
+        "computed_on": "right_half",
     }
     print(f"  Contour normals: {len(samples)} samples")
 
@@ -1133,7 +1137,7 @@ def phase_20_hu_moments(data, sym_all):
             "log_transformed: −sign(h)·log₁₀(|h|)."
         ),
         "reference": "Hu, M-K. IRE Trans. Inform. Theory, IT-8:179–187, 1962.",
-        "computed_on": "bilateral_symmetric_silhouette",
+        "computed_on": "mirrored_full",
         "point_count": len(sym_all),
         "raw": [round(h, 10) for h in hu],
         "log_transformed": hu_log,
@@ -1362,6 +1366,7 @@ def phase_24_curvature_scale_space(data, right_pts, right_dx, right_dy):
 
     data["curvature_scale_space"] = {
         "note": "Curvature Scale Space (CSS): κ at 5 Gaussian smoothing scales.",
+        "computed_on": "right_half",
         "reference": "Mokhtarian, F. & Mackworth, A. IEEE TPAMI 14(8):789–805, 1992.",
         "persistent_features": {
             "note": "dy locations appearing in top-5 across ≥2 scales. structural=true if ≥3.",
@@ -1411,11 +1416,12 @@ def phase_25_style_deviation(data, crown_dy, fig_height):
     l2 = float(np.sqrt(sum(d**2 for d in all_devs)))
 
     data["style_deviation"] = {
-        "note": "Signed deviation from Loomis 8-head academic canon.",
+        "note": "Signed deviation from Loomis 8-head academic canon. Deviations are in the schema's native HU (crown-to-neck_valley).",
         "reference": "Loomis, A. 'Figure Drawing for All It's Worth.' Viking, 1943. pp. 28–30.",
         "canon": "loomis_8_head_academic",
         "figure_head_count": data["proportion"]["head_count_total"],
         "canon_head_count": 8.0,
+        "normalized_to_standard_hu": False,
         "position_deviations": pos_devs,
         "width_deviations": width_devs,
         "l2_stylisation_distance": round(l2, 4),
@@ -1630,11 +1636,12 @@ def phase_29_shape_complexity(data, right_pts, sym_all, env_dx, env_dy):
     eccentricity = float(np.sqrt(1 - eigs[0] / eigs[1])) if eigs[1] > 0 else 0
 
     hull_perim = data.get("convex_hull", {}).get("hull_perimeter_hu", 0)
-    roughness = (2 * perim) / hull_perim if hull_perim > 0 and perim > 0 else 1.0
+    roughness = total_perim / hull_perim if hull_perim > 0 and total_perim > 0 else 1.0
 
     data["shape_complexity"] = {
         "note": "Shape complexity metrics from computational geometry.",
         "reference": "Costa, L.F. & Cesar, R.M. 'Shape Classification and Analysis.' 2nd ed., Springer, 2009.",
+        "computed_on": "right_half",
         "curvature_entropy": {"value": round(curv_entropy, 4), "units": "bits", "histogram_bins": 50,
                               "note": "Shannon entropy of |κ| histogram."},
         "fractal_dimension": {"value": round(fractal_dim, 4), "method": "box_counting", "n_scales": 10,
@@ -1644,7 +1651,8 @@ def phase_29_shape_complexity(data, right_pts, sym_all, env_dx, env_dy):
                         "computed_area_hu2": round(sil_area, 4),
                         "computed_perimeter_hu": round(total_perim, 4),
                         "note": "Isoperimetric ratio. Circle=1.0. Uses total_perimeter_hu from contour_quality."},
-        "rectangularity": {"value": round(float(rectangularity), 4), "formula": "A / A_bbox",
+        "rectangularity": {"value": round(float(rectangularity), 4),
+                           "formula": "A_shape / A_MBR per Rosin (2003), must be in [0,1]",
                            "note": "How well the figure fills its bounding box."},
         "eccentricity": {"value": round(float(eccentricity), 4),
                          "note": "Covariance-ellipse eccentricity. 0=circular, →1=elongated."},
@@ -1735,6 +1743,20 @@ def main():
 
     # ── Final meta update ──────────────────────────────────────
     data["meta"]["schema_version"] = "4.0.0"
+    # P2-9: Document the HU convention and conversion factor.
+    # hu_to_standard_factor converts from this schema's HU (crown→neck_valley)
+    # to the standard artistic HU (crown→chin). Multiply a schema HU measurement
+    # by this factor to get standard-HU values.
+    cs = data["meta"].get("coordinate_system", {})
+    cs["hu_convention"] = "crown_to_neck_valley"
+    neck_dy = existing_lm.get("neck_valley", {}).get("dy", crown_dy)
+    head_hu = neck_dy - crown_dy
+    if head_hu > 0:
+        # Standard head (crown-to-chin) is approximately 85% of crown-to-neck_valley
+        # per Richer (1971) and Bammes (1990).
+        estimated_standard_head = head_hu * 0.85
+        cs["hu_to_standard_factor"] = round(head_hu / estimated_standard_head, 4)
+    data["meta"]["coordinate_system"] = cs
     data["meta"]["sections"] = {
         "note": "v4.0 section inventory — 10 cross-domain improvement factors",
         "total_sections": len(data.keys()),
