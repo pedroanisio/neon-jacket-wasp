@@ -722,10 +722,12 @@ function loadJsonData(json) {
       } else if (Array.isArray(entry) && entry.length >= 2) {
         spans = entry;
       }
-      // Only use levels with exactly 2 spans (one right leg, one left leg)
+      // Only use levels with exactly 2 spans below the hip (dy > 4.0),
       // where the right span is on the positive side and left span is on
-      // the negative side — this filters out arm/torso complexity.
-      if (spans && spans.length === 2 &&
+      // the negative side.  Levels above the hip with 2 spans are torso/
+      // helmet detail crossings, not leg separation.
+      const dy = parseFloat(dk);
+      if (spans && spans.length === 2 && dy > 4.0 &&
           spans[0].inner_dx > 0 && spans[1].outer_dx < 0) {
         multiSpanLevels.push({
           dy: parseFloat(dk),

@@ -170,22 +170,23 @@ function normalize(raw) {
     const scanlines = raw.measurements.scanlines;
     const multiSpanLevels = [];
     for (const [dk, entry] of Object.entries(scanlines)) {
+      let spans = null;
       if (typeof entry === "object" && !Array.isArray(entry) && entry.topology_detail) {
-        const spans = entry.topology_detail;
-        if (Array.isArray(spans) && spans.length >= 2) {
-          // Gap between span 0 inner edge and span 1 outer edge
-          multiSpanLevels.push({
-            dy: parseFloat(dk),
-            gapLeft: spans[spans.length - 1].outer_dx,
-            gapRight: spans[0].inner_dx,
-          });
-        }
+        spans = entry.topology_detail;
       } else if (Array.isArray(entry) && entry.length >= 2) {
-        // Raw list format (v2 passthrough)
+        spans = entry;
+      }
+      // Only use levels with exactly 2 spans below the hip (dy > 4.0),
+      // where the right span is on the positive side and left span is on
+      // the negative side.  Levels above the hip with 2 spans are torso/
+      // helmet detail crossings, not leg separation.
+      const dy = parseFloat(dk);
+      if (spans && spans.length === 2 && dy > 4.0 &&
+          spans[0].inner_dx > 0 && spans[1].outer_dx < 0) {
         multiSpanLevels.push({
           dy: parseFloat(dk),
-          gapLeft: entry[entry.length - 1].outer_dx,
-          gapRight: entry[0].inner_dx,
+          gapLeft: spans[1].outer_dx,
+          gapRight: spans[0].inner_dx,
         });
       }
     }
