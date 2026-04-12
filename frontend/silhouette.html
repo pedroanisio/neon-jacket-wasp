@@ -781,9 +781,6 @@ function loadJsonData(json) {
   contour = parseContour(newContourFlat);
   LM = newLM;
 
-  // Load and skin interior detail strokes
-  loadStrokes(json);
-
   // Rebuild bilateral bone system from landmarks
   BONE_DEFS = buildBoneDefs(LM);
   bones = BONE_DEFS.map(d => ({
@@ -793,6 +790,9 @@ function loadJsonData(json) {
   bones.forEach((b,i) => BI[b.name] = i);
   armThresholdDx = LM.waist_valley ? LM.waist_valley[0] * 1.05 : 0.58;
   vertexWeights = contour.map(p => getWeights(p[0], p[1]));
+
+  // Load and skin interior detail strokes (after bone system is ready)
+  loadStrokes(json);
 
   // Reset animation state
   manualOverrides = {};
