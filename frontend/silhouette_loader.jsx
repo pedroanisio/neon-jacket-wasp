@@ -221,9 +221,16 @@ function Renderer({ data }) {
 
   const D = data;
   const contourPath = useMemo(() => {
-    const r = D.contour.map(([dx,dy])=>hts(dx,dy));
-    const l = [...D.contour].reverse().map(([dx,dy])=>hts(-dx,dy));
-    let path = "M "+[...r,...l].map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(" L ")+" Z";
+    let path;
+    if (D.mirrored) {
+      // 180° mode: mirror right half to build bilateral silhouette
+      const r = D.contour.map(([dx,dy])=>hts(dx,dy));
+      const l = [...D.contour].reverse().map(([dx,dy])=>hts(-dx,dy));
+      path = "M "+[...r,...l].map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(" L ")+" Z";
+    } else {
+      // 360° mode: use full contour directly
+      path = "M "+D.contour.map(([dx,dy])=>{const[x,y]=hts(dx,dy);return`${x.toFixed(1)},${y.toFixed(1)}`;}).join(" L ")+" Z";
+    }
 
     // Append interior hole sub-paths from multi-span scanline data.
     // Each hole is a polygon tracing the gap between separated body parts
@@ -235,7 +242,7 @@ function Renderer({ data }) {
       path += " M "+[...rightEdge,...leftEdge].map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(" L ")+" Z";
     }
     return path;
-  },[D.contour, D.holes]);
+  },[D.contour, D.mirrored, D.holes]);
 
   const lmData = useMemo(()=>D.landmarks.map(lm=>{
     const [xR,y]=hts(lm.dx,lm.dy);
