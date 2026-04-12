@@ -384,7 +384,28 @@ function drawFill(pts) {
     ctx.lineTo(sx, sy);
   }
   ctx.closePath();
-  ctx.fill();
+
+  // Add interior hole sub-paths from multi-span scanline data.
+  // These carve out gaps between separated body parts (e.g. legs).
+  if (window._holePolygons) {
+    for (const hole of window._holePolygons) {
+      // Right edge of gap (going down)
+      const [hx0, hy0] = toScreen(hole[0].gapRight, hole[0].dy);
+      ctx.moveTo(hx0, hy0);
+      for (let i = 1; i < hole.length; i++) {
+        const [hx, hy] = toScreen(hole[i].gapRight, hole[i].dy);
+        ctx.lineTo(hx, hy);
+      }
+      // Left edge of gap (going back up)
+      for (let i = hole.length - 1; i >= 0; i--) {
+        const [hx, hy] = toScreen(hole[i].gapLeft, hole[i].dy);
+        ctx.lineTo(hx, hy);
+      }
+      ctx.closePath();
+    }
+  }
+
+  ctx.fill("evenodd");
 }
 
 function drawOutline(pts) {
@@ -687,6 +708,44 @@ function loadJsonData(json) {
                     'hip_peak','knee_valley','ankle_valley','sole'];
   for (const name of required) {
     if (!newLM[name]) throw new Error('Missing required landmark: ' + name);
+  }
+
+  // Extract interior hole polygons from multi-span scanline data
+  window._holePolygons = [];
+  if (json.measurements && json.measurements.scanlines) {
+    const scanlines = json.measurements.scanlines;
+    const multiSpanLevels = [];
+    for (const [dk, entry] of Object.entries(scanlines)) {
+      if (entry && typeof entry === 'object' && !Array.isArray(entry) && entry.topology_detail) {
+        const spans = entry.topology_detail;
+        if (Array.isArray(spans) && spans.length >= 2) {
+          multiSpanLevels.push({
+            dy: parseFloat(dk),
+            gapLeft: spans[spans.length - 1].outer_dx,
+            gapRight: spans[0].inner_dx,
+          });
+        }
+      } else if (Array.isArray(entry) && entry.length >= 2) {
+        multiSpanLevels.push({
+          dy: parseFloat(dk),
+          gapLeft: entry[entry.length - 1].outer_dx,
+          gapRight: entry[0].inner_dx,
+        });
+      }
+    }
+    multiSpanLevels.sort((a, b) => a.dy - b.dy);
+    if (multiSpanLevels.length >= 2) {
+      let group = [multiSpanLevels[0]];
+      for (let i = 1; i < multiSpanLevels.length; i++) {
+        if (multiSpanLevels[i].dy - multiSpanLevels[i - 1].dy <= 0.25) {
+          group.push(multiSpanLevels[i]);
+        } else {
+          if (group.length >= 2) window._holePolygons.push(group);
+          group = [multiSpanLevels[i]];
+        }
+      }
+      if (group.length >= 2) window._holePolygons.push(group);
+    }
   }
 
   // Update globals
