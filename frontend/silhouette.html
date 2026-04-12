@@ -251,6 +251,37 @@ function deformContour() {
 }
 
 // ===================================================================
+// STROKES — interior detail lines, skinned like contour vertices
+// ===================================================================
+// Each stroke: { pts: [[dx,dy],...], weights: [weights_per_vertex,...] }
+let strokes = [];
+
+function loadStrokes(json) {
+  strokes = [];
+  if (!json || !json.strokes) return;
+  const mirrored = json.meta && json.meta.mirror && json.meta.mirror.applied;
+  for (const s of json.strokes) {
+    const pts = s.points || [];
+    if (pts.length < 2) continue;
+    // Right-side stroke
+    const weights = pts.map(p => getWeights(p[0], p[1]));
+    strokes.push({ pts, weights });
+    // If mirrored, add the left-side copy
+    if (mirrored) {
+      const mirPts = pts.map(p => [-p[0], p[1]]);
+      const mirWeights = mirPts.map(p => getWeights(p[0], p[1]));
+      strokes.push({ pts: mirPts, weights: mirWeights });
+    }
+  }
+}
+
+function deformStrokes() {
+  return strokes.map(s => ({
+    deformed: s.pts.map((p, i) => deformPoint(p[0], p[1], s.weights[i])),
+  }));
+}
+
+// ===================================================================
 // ANIMATION PRESETS
 // ===================================================================
 const PI = Math.PI;
@@ -332,7 +363,7 @@ function toScreen(dx, dy) {
 
 // Display toggles
 const display = {
-  fill: true, outline: true, skeleton: true,
+  fill: true, outline: true, strokes: true, skeleton: true,
   joints: true, labels: false, com: true, grid: false,
 };
 
@@ -400,6 +431,23 @@ function drawOutline(pts) {
   ctx.strokeStyle = 'rgba(80,120,255,0.12)';
   ctx.lineWidth = 4;
   ctx.stroke();
+}
+
+function drawDetailStrokes(deformedStrokes) {
+  ctx.lineWidth = 0.8;
+  for (const s of deformedStrokes) {
+    const pts = s.deformed;
+    if (pts.length < 2) continue;
+    ctx.strokeStyle = 'rgba(120,160,255,0.3)';
+    ctx.beginPath();
+    const [sx0, sy0] = toScreen(pts[0][0], pts[0][1]);
+    ctx.moveTo(sx0, sy0);
+    for (let i = 1; i < pts.length; i++) {
+      const [sx, sy] = toScreen(pts[i][0], pts[i][1]);
+      ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+  }
 }
 
 function drawSkeleton() {
@@ -522,6 +570,9 @@ function render(ts) {
 
   // Outline
   if (display.outline) drawOutline(deformed);
+
+  // Detail strokes
+  if (display.strokes && strokes.length > 0) drawDetailStrokes(deformStrokes());
 
   // Skeleton
   if (display.skeleton) drawSkeleton();
@@ -729,6 +780,9 @@ function loadJsonData(json) {
   // Update globals
   contour = parseContour(newContourFlat);
   LM = newLM;
+
+  // Load and skin interior detail strokes
+  loadStrokes(json);
 
   // Rebuild bilateral bone system from landmarks
   BONE_DEFS = buildBoneDefs(LM);
