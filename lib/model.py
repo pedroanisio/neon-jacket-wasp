@@ -5,13 +5,111 @@ Typed Python representation of all 27 sections of the v4 silhouette
 analysis schema.  Use ``SilhouetteV4.model_validate(data)`` to parse
 and validate a v4 JSON document, and ``instance.model_dump()`` to
 serialize back to a dict.
+
+PALS's Law compliance
+---------------------
+This module treats all input data as **untrusted by default** per PALS's
+Law v1.5.4 (§2).  Pydantic strict-mode validation provides the
+verification boundary, covering ``ERR_SCHEMA``, ``ERR_OMISSION``, and
+``ERR_TRUNCATION``.  See ``LLMErrorClass`` and ``VerificationReport``
+for the full taxonomy and scope declaration required by §8.3.
 """
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+# ═══════════════════════════════════════════════════════════════
+# PALS's Law v1.5.4 — Compliance primitives (§5, §8.3, §9.1)
+# ═══════════════════════════════════════════════════════════════
+
+PALS_LAW_VERSION: str = "1.5.4"
+"""PALS's Law document version this module conforms to."""
+
+
+class LLMErrorClass(StrEnum):
+    """PALS's Law §5 — Taxonomy of LLM Errors.
+
+    Nine mutually non-exclusive failure modes that the error predicate
+    ε(y, x) may detect.  Every verification boundary MUST declare which
+    classes it covers (§8.3, Corollary 3).
+    """
+
+    ERR_HALLUCINATION = "ERR_HALLUCINATION"
+    """Asserting a false factual claim with apparent confidence."""
+
+    ERR_OMISSION = "ERR_OMISSION"
+    """Silently dropping required content or fields."""
+
+    ERR_SCHEMA = "ERR_SCHEMA"
+    """Output structurally non-conformant with the declared format."""
+
+    ERR_TRUNCATION = "ERR_TRUNCATION"
+    """Output cut short due to token budget or streaming interruption."""
+
+    ERR_SYCOPHANCY = "ERR_SYCOPHANCY"
+    """Output shaped by perceived user preference rather than truth."""
+
+    ERR_INSTRUCTION = "ERR_INSTRUCTION"
+    """Violation of explicit constraints stated in the prompt."""
+
+    ERR_CALIBRATION = "ERR_CALIBRATION"
+    """Expressed confidence misaligned with actual reliability."""
+
+    ERR_SEMANTIC = "ERR_SEMANTIC"
+    """Correct surface form, wrong meaning."""
+
+    ERR_REASONING = "ERR_REASONING"
+    """Invalid composition — correct facts, broken inference chain."""
+
+
+ALL_ERROR_CLASSES: frozenset[LLMErrorClass] = frozenset(LLMErrorClass)
+
+
+class VerificationResult(BaseModel):
+    """Result of checking a single PALS error class."""
+
+    error_class: LLMErrorClass
+    covered: bool
+    method: str | None = None
+    note: str | None = None
+
+
+class VerificationReport(BaseModel):
+    """PALS's Law §8.3 — Verification scope declaration.
+
+    Every verification boundary must produce a report declaring which
+    error classes it covers and which remain unchecked (known, accepted
+    risks).  Leaving all boxes unchecked with no mitigation note is a
+    blocking defect (§9.1).
+    """
+
+    pals_law_version: str = PALS_LAW_VERSION
+    verified: list[VerificationResult]
+    schema_errors: list[str] = Field(default_factory=list)
+
+    @property
+    def covered_classes(self) -> frozenset[LLMErrorClass]:
+        """Error classes covered by this verification boundary."""
+        return frozenset(r.error_class for r in self.verified if r.covered)
+
+    @property
+    def uncovered_classes(self) -> frozenset[LLMErrorClass]:
+        """Error classes NOT covered — known, accepted risks."""
+        return ALL_ERROR_CLASSES - self.covered_classes
+
+    @property
+    def is_fully_verified(self) -> bool:
+        """True only if every error class is covered."""
+        return self.uncovered_classes == frozenset()
+
+    @property
+    def passed(self) -> bool:
+        """True if covered classes found no violations."""
+        return len(self.schema_errors) == 0
 
 # ═══════════════════════════════════════════════════════════════
 # Type aliases  ($defs in JSON Schema)

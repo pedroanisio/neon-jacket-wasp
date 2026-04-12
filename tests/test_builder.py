@@ -10,10 +10,14 @@ import pytest
 
 from lib.builder import MetaBuilder, SilhouetteBuilder, SilhouetteDocument
 from lib.model import (
+    ALL_ERROR_CLASSES,
+    PALS_LAW_VERSION,
+    LLMErrorClass,
     Landmark,
     Meta,
     Stroke,
     SilhouetteV4,
+    VerificationReport,
 )
 
 
@@ -613,3 +617,134 @@ class TestRealData:
         errors = doc.validate()
         # The sample data is known to have constraint violations.
         assert isinstance(errors, list)
+
+
+# ═══════════════════════════════════════════════════════════
+# PALS's Law v1.5.4 compliance tests
+# ═══════════════════════════════════════════════════════════
+
+class TestPALSLawCompliance:
+    """Tests verifying PALS's Law v1.5.4 compliance (§5, §8, §9)."""
+
+    @pytest.fixture()
+    def strict_doc(self) -> SilhouetteDocument:
+        meta = _meta_builder().build()
+        sections = _minimal_sections()
+        builder = SilhouetteBuilder().meta(meta)
+        for name, data in sections.items():
+            builder.set_section(name, data)
+        return builder.build()
+
+    # -- §9.1: PALS_LAW_VERSION constant exists --
+
+    def test_pals_law_version_constant(self):
+        assert PALS_LAW_VERSION == "1.5.4"
+
+    # -- §5: All 9 error classes are defined --
+
+    def test_error_taxonomy_completeness(self):
+        expected = {
+            "ERR_HALLUCINATION",
+            "ERR_OMISSION",
+            "ERR_SCHEMA",
+            "ERR_TRUNCATION",
+            "ERR_SYCOPHANCY",
+            "ERR_INSTRUCTION",
+            "ERR_CALIBRATION",
+            "ERR_SEMANTIC",
+            "ERR_REASONING",
+        }
+        actual = {cls.value for cls in LLMErrorClass}
+        assert actual == expected
+
+    def test_all_error_classes_frozenset(self):
+        assert len(ALL_ERROR_CLASSES) == 9
+        assert all(isinstance(c, LLMErrorClass) for c in ALL_ERROR_CLASSES)
+
+    # -- §8.3 Corollary 3: Verification scope must match error taxonomy --
+
+    def test_strict_report_covers_schema_omission_truncation(self, strict_doc):
+        report = strict_doc.verification_report()
+        covered = report.covered_classes
+        assert LLMErrorClass.ERR_SCHEMA in covered
+        assert LLMErrorClass.ERR_OMISSION in covered
+        assert LLMErrorClass.ERR_TRUNCATION in covered
+
+    def test_strict_report_declares_uncovered_classes(self, strict_doc):
+        report = strict_doc.verification_report()
+        uncovered = report.uncovered_classes
+        assert LLMErrorClass.ERR_HALLUCINATION in uncovered
+        assert LLMErrorClass.ERR_SYCOPHANCY in uncovered
+        assert LLMErrorClass.ERR_INSTRUCTION in uncovered
+        assert LLMErrorClass.ERR_CALIBRATION in uncovered
+        assert LLMErrorClass.ERR_SEMANTIC in uncovered
+        assert LLMErrorClass.ERR_REASONING in uncovered
+
+    def test_strict_report_all_classes_accounted_for(self, strict_doc):
+        report = strict_doc.verification_report()
+        accounted = report.covered_classes | report.uncovered_classes
+        assert accounted == ALL_ERROR_CLASSES
+
+    def test_strict_report_version(self, strict_doc):
+        report = strict_doc.verification_report()
+        assert report.pals_law_version == "1.5.4"
+
+    def test_strict_report_passed_on_valid_doc(self, strict_doc):
+        report = strict_doc.verification_report()
+        assert report.passed is True
+        assert report.schema_errors == []
+
+    # -- §8.4 Corollary 4: Silent acceptance is an architectural defect --
+
+    def test_lenient_report_covers_nothing(self, strict_doc):
+        """Lenient mode MUST declare zero coverage (explicit risk acceptance)."""
+        d = strict_doc.to_dict()
+        lenient_doc = SilhouetteDocument.from_dict(d, strict=False)
+        report = lenient_doc.verification_report()
+        assert report.covered_classes == frozenset()
+        assert report.uncovered_classes == ALL_ERROR_CLASSES
+
+    def test_lenient_report_all_results_uncovered(self, strict_doc):
+        d = strict_doc.to_dict()
+        lenient_doc = SilhouetteDocument.from_dict(d, strict=False)
+        report = lenient_doc.verification_report()
+        for result in report.verified:
+            assert result.covered is False
+            assert "Lenient mode" in (result.note or "")
+
+    # -- §8.3: Every result has a method or note --
+
+    def test_every_result_has_explanation(self, strict_doc):
+        report = strict_doc.verification_report()
+        for result in report.verified:
+            has_explanation = result.method is not None or result.note is not None
+            assert has_explanation, (
+                f"{result.error_class}: must have method or note"
+            )
+
+    # -- VerificationReport properties --
+
+    def test_report_is_not_fully_verified(self, strict_doc):
+        """SDK cannot claim full coverage (§8.3)."""
+        report = strict_doc.verification_report()
+        assert report.is_fully_verified is False
+
+    # -- §8.3: Report detects schema violations --
+
+    def test_report_captures_schema_errors(self):
+        meta = _meta_builder().build()
+        sections = _minimal_sections()
+        builder = SilhouetteBuilder().meta(meta)
+        for name, data in sections.items():
+            builder.set_section(name, data)
+        d = builder.build().to_dict()
+
+        # Introduce a violation: negative full_width
+        d["width_profile"]["samples"][0]["full_width"] = -1.0
+
+        lenient_doc = SilhouetteDocument.from_dict(d, strict=False)
+        report = lenient_doc.verification_report()
+        # Lenient mode doesn't run Pydantic validation eagerly,
+        # but verification_report() re-validates and captures errors.
+        assert len(report.schema_errors) > 0
+        assert report.passed is False

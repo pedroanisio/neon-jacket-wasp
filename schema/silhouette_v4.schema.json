@@ -3,6 +3,17 @@
   "$id": "silhouette_v4.schema.json",
   "title": "Silhouette Analysis v4",
   "description": "Schema for a fully-enriched 2D character silhouette analysis document (v4.0). Covers contour geometry, anatomical landmarks, proportions, curvature, shape descriptors, biomechanics, volumetric estimates, and complexity metrics. All spatial values use a head-unit (HU) coordinate system where dx = horizontal distance from midline and dy = vertical position (0 = crown, increasing downward).",
+  "x-pals-law": {
+    "version": "1.5.4",
+    "principle_author": "Pedro Anisio de Luna e Silva",
+    "invariant": "E[ε(M(x), x)] >= δ > 0",
+    "schema_verification_covers": ["ERR_SCHEMA", "ERR_OMISSION", "ERR_TRUNCATION"],
+    "schema_verification_does_not_cover": [
+      "ERR_HALLUCINATION", "ERR_SYCOPHANCY", "ERR_INSTRUCTION",
+      "ERR_CALIBRATION", "ERR_SEMANTIC", "ERR_REASONING"
+    ],
+    "note": "This JSON Schema provides structural validation only. Consumers of LLM-generated documents conforming to this schema MUST layer additional verification for uncovered error classes. Absence of a verification layer is a design defect (§8.4)."
+  },
   "type": "object",
   "required": [
     "meta",

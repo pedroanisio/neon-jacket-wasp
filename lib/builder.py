@@ -29,13 +29,39 @@ Quick start::
     # Load without strict constraint checking (e.g. pipeline outputs
     # with minor floating-point violations like negative widths)
     doc = SilhouetteDocument.from_json("existing.json", strict=False)
+
+ARCHITECTURAL CONTRACT -- PALS's LAW
+-------------------------------------
+Principle authored by: Pedro Anisio de Luna e Silva
+
+PALS_LAW_VERSION: 1.5.4
+
+INVARIANT (operative form):
+    E[ε(M(x), x)] >= δ > 0
+
+ERROR CLASSES COVERED BY THIS SDK's VERIFIER:
+    [x] ERR_SCHEMA       — Pydantic strict-mode: type, structure, constraints
+    [x] ERR_OMISSION      — Pydantic required fields + SilhouetteBuilder.missing_sections()
+    [x] ERR_TRUNCATION    — min_length on contour/midline/landmarks/strokes
+
+ERROR CLASSES NOT COVERED (known, accepted risks):
+    [ ] ERR_HALLUCINATION — No factual/semantic ground truth at schema level
+    [ ] ERR_SYCOPHANCY    — Not applicable to structured data ingestion
+    [ ] ERR_INSTRUCTION   — Upstream concern; SDK validates output, not prompt
+    [ ] ERR_CALIBRATION   — No confidence calibration at schema level
+    [ ] ERR_SEMANTIC      — Structural validation only; no semantic checks
+    [ ] ERR_REASONING     — No cross-field logical consistency verification
+
+Unchecked boxes are known, accepted risks.  Callers consuming LLM-
+generated JSON MUST layer additional verification for uncovered classes.
+See ``SilhouetteDocument.verification_report()`` for programmatic access.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import ValidationError
 
@@ -43,6 +69,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 from lib.model import (
+    ALL_ERROR_CLASSES,
+    PALS_LAW_VERSION,
     AreaProfile,
     Biomechanics,
     BodyRegions,
@@ -62,6 +90,7 @@ from lib.model import (
     GestureLine,
     HairSymmetry,
     HuMoments,
+    LLMErrorClass,
     Landmark,
     LandmarkValidation,
     Measurements,
@@ -81,6 +110,8 @@ from lib.model import (
     Symmetry,
     Timing,
     TurningFunction,
+    VerificationReport,
+    VerificationResult,
     ViewClassification,
     VolumetricEstimates,
     WidthProfile,
@@ -91,6 +122,89 @@ __all__ = [
     "SilhouetteBuilder",
     "SilhouetteDocument",
 ]
+
+# ──────────────────────────────────────────────────────────
+# PALS's Law — Verification scope (§8.3)
+# ──────────────────────────────────────────────────────────
+
+# Error classes covered by Pydantic strict-mode validation.
+_COVERED_CLASSES: dict[LLMErrorClass, str] = {
+    LLMErrorClass.ERR_SCHEMA: (
+        "Pydantic strict-mode: extra='forbid', type checks, "
+        "field constraints (ge, le, gt, pattern, min_length)"
+    ),
+    LLMErrorClass.ERR_OMISSION: (
+        "Required fields enforced by Pydantic; "
+        "SilhouetteBuilder.missing_sections() guards completeness"
+    ),
+    LLMErrorClass.ERR_TRUNCATION: (
+        "min_length constraints on contour (≥3), midline (≥2), "
+        "landmarks (≥1), strokes points (≥2)"
+    ),
+}
+
+# Error classes NOT covered — known, accepted risks per §9.1.
+_UNCOVERED_CLASSES: dict[LLMErrorClass, str] = {
+    LLMErrorClass.ERR_HALLUCINATION: (
+        "No factual ground truth available at schema level"
+    ),
+    LLMErrorClass.ERR_SYCOPHANCY: (
+        "Not applicable to structured data ingestion"
+    ),
+    LLMErrorClass.ERR_INSTRUCTION: (
+        "Upstream concern; SDK validates output, not prompt adherence"
+    ),
+    LLMErrorClass.ERR_CALIBRATION: (
+        "No confidence calibration verification at schema level"
+    ),
+    LLMErrorClass.ERR_SEMANTIC: (
+        "Structural validation only; semantic plausibility unchecked"
+    ),
+    LLMErrorClass.ERR_REASONING: (
+        "No cross-field logical consistency verification"
+    ),
+}
+
+
+def _build_verification_report(
+    schema_errors: list[str] | None = None,
+    *,
+    strict: bool = True,
+) -> VerificationReport:
+    """Build a ``VerificationReport`` for the SDK's verification boundary.
+
+    In strict mode, ERR_SCHEMA/ERR_OMISSION/ERR_TRUNCATION are covered.
+    In lenient mode (``strict=False``), NO error classes are covered —
+    this is explicit risk acceptance per PALS's Law §8.4 (Corollary 4).
+    """
+    results: list[VerificationResult] = []
+
+    if strict:
+        for cls, method in _COVERED_CLASSES.items():
+            results.append(
+                VerificationResult(error_class=cls, covered=True, method=method)
+            )
+        for cls, note in _UNCOVERED_CLASSES.items():
+            results.append(
+                VerificationResult(error_class=cls, covered=False, note=note)
+            )
+    else:
+        # PALS's Law §8.4: Silent acceptance is an architectural defect.
+        # Lenient mode explicitly declares ZERO coverage.
+        for cls in ALL_ERROR_CLASSES:
+            results.append(
+                VerificationResult(
+                    error_class=cls,
+                    covered=False,
+                    note="Lenient mode: all verification bypassed (§8.4 risk acceptance)",
+                )
+            )
+
+    return VerificationReport(
+        verified=results,
+        schema_errors=schema_errors or [],
+    )
+
 
 # ──────────────────────────────────────────────────────────
 # Helpers
@@ -104,7 +218,8 @@ def _coerce[T](model_cls: type[T], value: _ModelOrDict) -> T:
     """Return a validated model instance from *value* (model or dict)."""
     if isinstance(value, model_cls):
         return value
-    return model_cls.model_validate(value)  # type: ignore[attr-defined]
+    result: T = model_cls.model_validate(value)  # type: ignore[attr-defined]
+    return result
 
 
 def _coerce_list[T](model_cls: type[T], values: Sequence[_ModelOrDict]) -> list[T]:
@@ -201,9 +316,9 @@ class MetaBuilder:
     def classify(
         self,
         *,
-        surface: str,
-        gender: str,
-        view: str,
+        surface: Literal["armored", "clothed", "nude"],
+        gender: Literal["female", "male", "ambiguous"],
+        view: Literal["front", "back", "three_quarter", "front_or_back"],
         surface_confidence: float = 1.0,
         gender_confidence: float = 1.0,
     ) -> MetaBuilder:
@@ -216,15 +331,15 @@ class MetaBuilder:
         self._classification["view"] = ViewClassification(label=view)
         return self
 
-    def contour_quality(self, value: ContourQuality | dict) -> MetaBuilder:
+    def contour_quality(self, value: ContourQuality | dict[str, Any]) -> MetaBuilder:
         self._data["contour_quality"] = _coerce(ContourQuality, value)
         return self
 
-    def bounding_box(self, value: BoundingBox | dict) -> MetaBuilder:
+    def bounding_box(self, value: BoundingBox | dict[str, Any]) -> MetaBuilder:
         self._data["bounding_box_hu"] = _coerce(BoundingBox, value)
         return self
 
-    def sections(self, value: SectionInventory | dict) -> MetaBuilder:
+    def sections(self, value: SectionInventory | dict[str, Any]) -> MetaBuilder:
         self._data["sections"] = _coerce(SectionInventory, value)
         return self
 
@@ -251,7 +366,7 @@ class MetaBuilder:
         )
         return self
 
-    def hair_symmetry(self, value: HairSymmetry | dict) -> MetaBuilder:
+    def hair_symmetry(self, value: HairSymmetry | dict[str, Any]) -> MetaBuilder:
         self._classification["hair_symmetry"] = _coerce(HairSymmetry, value)
         return self
 
@@ -273,7 +388,7 @@ class MetaBuilder:
             self._data["extracted_figure_view"] = figure_view
         return self
 
-    def landmark_validation(self, value: LandmarkValidation | dict) -> MetaBuilder:
+    def landmark_validation(self, value: LandmarkValidation | dict[str, Any]) -> MetaBuilder:
         self._data["landmark_validation"] = _coerce(LandmarkValidation, value)
         return self
 
@@ -355,87 +470,93 @@ class SilhouetteBuilder:
 
     # ── List-of-model sections ──
 
-    def landmarks(self, values: Sequence[Landmark | dict]) -> SilhouetteBuilder:
+    def landmarks(self, values: Sequence[Landmark | dict[str, Any]]) -> SilhouetteBuilder:
         self._sections["landmarks"] = _coerce_list(Landmark, values)
         return self
 
-    def strokes(self, values: Sequence[Stroke | dict]) -> SilhouetteBuilder:
+    def strokes(self, values: Sequence[Stroke | dict[str, Any]]) -> SilhouetteBuilder:
         self._sections["strokes"] = _coerce_list(Stroke, values)
         return self
 
-    def candidates(self, values: Sequence[Candidate | dict]) -> SilhouetteBuilder:
+    def candidates(self, values: Sequence[Candidate | dict[str, Any]]) -> SilhouetteBuilder:
         self._sections["candidates"] = _coerce_list(Candidate, values)
         return self
 
     # ── Object sections (one method per section) ──
 
-    def meta(self, value: Meta | dict) -> SilhouetteBuilder:
+    def meta(self, value: Meta | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("meta", value)
 
-    def symmetry(self, value: Symmetry | dict) -> SilhouetteBuilder:
+    def symmetry(self, value: Symmetry | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("symmetry", value)
 
-    def measurements(self, value: Measurements | dict) -> SilhouetteBuilder:
+    def measurements(self, value: Measurements | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("measurements", value)
 
-    def parametric(self, value: Parametric | dict) -> SilhouetteBuilder:
+    def parametric(self, value: Parametric | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("parametric", value)
 
-    def proportion(self, value: Proportion | dict) -> SilhouetteBuilder:
+    def proportion(self, value: Proportion | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("proportion", value)
 
-    def curvature(self, value: Curvature | dict) -> SilhouetteBuilder:
+    def curvature(self, value: Curvature | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("curvature", value)
 
-    def body_regions(self, value: BodyRegions | dict) -> SilhouetteBuilder:
+    def body_regions(self, value: BodyRegions | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("body_regions", value)
 
-    def cross_section_topology(self, value: CrossSectionTopology | dict) -> SilhouetteBuilder:
+    def cross_section_topology(
+        self, value: CrossSectionTopology | dict[str, Any]
+    ) -> SilhouetteBuilder:
         return self._set_object("cross_section_topology", value)
 
-    def fourier_descriptors(self, value: FourierDescriptors | dict) -> SilhouetteBuilder:
+    def fourier_descriptors(self, value: FourierDescriptors | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("fourier_descriptors", value)
 
-    def width_profile(self, value: WidthProfile | dict) -> SilhouetteBuilder:
+    def width_profile(self, value: WidthProfile | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("width_profile", value)
 
-    def area_profile(self, value: AreaProfile | dict) -> SilhouetteBuilder:
+    def area_profile(self, value: AreaProfile | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("area_profile", value)
 
-    def contour_normals(self, value: ContourNormals | dict) -> SilhouetteBuilder:
+    def contour_normals(self, value: ContourNormals | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("contour_normals", value)
 
-    def shape_vector(self, value: ShapeVector | dict) -> SilhouetteBuilder:
+    def shape_vector(self, value: ShapeVector | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("shape_vector", value)
 
-    def hu_moments(self, value: HuMoments | dict) -> SilhouetteBuilder:
+    def hu_moments(self, value: HuMoments | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("hu_moments", value)
 
-    def turning_function(self, value: TurningFunction | dict) -> SilhouetteBuilder:
+    def turning_function(self, value: TurningFunction | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("turning_function", value)
 
-    def convex_hull(self, value: ConvexHull | dict) -> SilhouetteBuilder:
+    def convex_hull(self, value: ConvexHull | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("convex_hull", value)
 
-    def gesture_line(self, value: GestureLine | dict) -> SilhouetteBuilder:
+    def gesture_line(self, value: GestureLine | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("gesture_line", value)
 
-    def curvature_scale_space(self, value: CurvatureScaleSpace | dict) -> SilhouetteBuilder:
+    def curvature_scale_space(
+        self, value: CurvatureScaleSpace | dict[str, Any]
+    ) -> SilhouetteBuilder:
         return self._set_object("curvature_scale_space", value)
 
-    def style_deviation(self, value: StyleDeviation | dict) -> SilhouetteBuilder:
+    def style_deviation(self, value: StyleDeviation | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("style_deviation", value)
 
-    def volumetric_estimates(self, value: VolumetricEstimates | dict) -> SilhouetteBuilder:
+    def volumetric_estimates(
+        self, value: VolumetricEstimates | dict[str, Any]
+    ) -> SilhouetteBuilder:
         return self._set_object("volumetric_estimates", value)
 
-    def biomechanics(self, value: Biomechanics | dict) -> SilhouetteBuilder:
+    def biomechanics(self, value: Biomechanics | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("biomechanics", value)
 
-    def medial_axis(self, value: MedialAxis | dict) -> SilhouetteBuilder:
+    def medial_axis(self, value: MedialAxis | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("medial_axis", value)
 
-    def shape_complexity(self, value: ShapeComplexity | dict) -> SilhouetteBuilder:
+    def shape_complexity(self, value: ShapeComplexity | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("shape_complexity", value)
 
     # ── Bulk setter ──
@@ -451,7 +572,8 @@ class SilhouetteBuilder:
         # Delegate to the typed method if one exists.
         method = getattr(self, name, None)
         if method is not None and callable(method):
-            return method(value)
+            result: SilhouetteBuilder = method(value)
+            return result
         msg = f"Unknown section: {name!r}"
         raise ValueError(msg)
 
@@ -501,6 +623,8 @@ class SilhouetteBuilder:
 class SilhouetteDocument:
     """Immutable wrapper around a ``SilhouetteV4`` document.
 
+    // PALS's LAW: LLM output is untrusted by default. Verify before use.
+
     Provides JSON serialization and deserialization, including a
     ``strict=False`` mode for loading pipeline outputs that may have
     minor floating-point constraint violations (e.g. negative widths
@@ -508,11 +632,20 @@ class SilhouetteDocument:
 
     In **strict** mode (the default), the document is fully validated
     by Pydantic and ``model`` returns a ``SilhouetteV4`` instance.
+    This covers ERR_SCHEMA, ERR_OMISSION, and ERR_TRUNCATION per
+    PALS's Law §5.
 
     In **lenient** mode (``strict=False``), the raw dict is preserved
     as-is — no constraint validators run.  ``model`` is ``None``, but
     ``to_dict()`` / ``to_json()`` work normally.  Use ``validate()`` to
     check which constraints (if any) are violated.
+
+    .. warning:: PALS's Law §8.4 (Corollary 4)
+
+       Lenient mode is **explicit risk acceptance**: no error classes
+       are verified.  Any system that passes lenient-mode output to
+       downstream consumers without additional verification has an
+       architectural omission.
     """
 
     def __init__(
@@ -560,7 +693,9 @@ class SilhouetteDocument:
     # ── Deserialization ──
 
     @classmethod
-    def from_json(cls, path: str | Path, *, strict: bool = True) -> SilhouetteDocument:
+    def from_json(
+        cls, path: str | Path, *, strict: bool = True
+    ) -> SilhouetteDocument:
         """Load and validate a JSON file.
 
         Parameters
@@ -570,18 +705,31 @@ class SilhouetteDocument:
         strict : bool
             If ``True`` (default), Pydantic constraints (``ge``, ``le``,
             etc.) are enforced and ``ValidationError`` is raised on
-            violations.  If ``False``, the raw dict is preserved
-            without constraint checking — useful for pipeline outputs
-            with minor floating-point artifacts.
+            violations.  Covers ERR_SCHEMA, ERR_OMISSION, ERR_TRUNCATION
+            per PALS's Law §5.
+
+            If ``False``, the raw dict is preserved without constraint
+            checking — useful for pipeline outputs with minor floating-
+            point artifacts.  **This is explicit risk acceptance per
+            PALS's Law §8.4** — call ``verification_report()`` on the
+            returned document to inspect uncovered error classes.
         """
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         return cls.from_dict(data, strict=strict)
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], *, strict: bool = True) -> SilhouetteDocument:
+    def from_dict(
+        cls, data: dict[str, Any], *, strict: bool = True
+    ) -> SilhouetteDocument:
         """Create from a plain dict.
 
         See ``from_json`` for the meaning of *strict*.
+
+        .. note:: PALS's Law §8.2 (Corollary 2)
+
+           A prior call with ``strict=True`` that succeeded does NOT
+           justify calling with ``strict=False`` on subsequent inputs.
+           Trust accumulation is prohibited.
         """
         if strict:
             return cls(SilhouetteV4.model_validate(data))
@@ -592,18 +740,45 @@ class SilhouetteDocument:
         """Create from a JSON string."""
         return cls.from_dict(json.loads(text), strict=strict)
 
-    # ── Convenience ──
+    # ── Verification boundary (PALS's Law §8.3) ──
 
     def validate(self) -> list[str]:
         """Re-validate the document and return a list of error messages.
 
         Returns an empty list if the document is fully valid.
+        Covers ERR_SCHEMA, ERR_OMISSION, and ERR_TRUNCATION.
         """
         try:
             SilhouetteV4.model_validate(self.to_dict())
         except ValidationError as exc:
             return [str(e) for e in exc.errors()]
         return []
+
+    def verification_report(self) -> VerificationReport:
+        """Return a PALS's Law §8.3 verification scope declaration.
+
+        The report declares which of the nine LLM error classes (§5)
+        are covered by this SDK's validation boundary and which are
+        known, accepted risks.
+
+        In **strict** mode, the report covers:
+          - ERR_SCHEMA (type/structure/constraint validation)
+          - ERR_OMISSION (required field enforcement)
+          - ERR_TRUNCATION (minimum length constraints)
+
+        In **lenient** mode (``strict=False``), the report declares
+        ZERO coverage — explicit risk acceptance per §8.4.
+
+        Returns
+        -------
+        VerificationReport
+            Includes ``schema_errors`` if any Pydantic violations were
+            detected, plus full coverage/non-coverage declarations.
+        """
+        schema_errors = self.validate()
+        return _build_verification_report(schema_errors, strict=self.is_strict)
+
+    # ── Convenience ──
 
     def __repr__(self) -> str:
         if self._model is not None:
