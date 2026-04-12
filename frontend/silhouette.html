@@ -643,7 +643,31 @@ function loadJsonData(json) {
 
   // v4 schema format: contour = [[dx,dy],...], landmarks = [{name,dx,dy},...]
   if (Array.isArray(json.contour) && Array.isArray(json.landmarks)) {
-    newContourFlat = json.contour.flat();
+    // When mirror.applied is true, the contour stores the right-side
+    // outline + a midline return path.  We need to build the full
+    // bilateral polygon by mirroring the right half.
+    const pts = json.contour;
+    const mirrored = json.meta && json.meta.mirror && json.meta.mirror.applied;
+
+    if (mirrored) {
+      // Right half: index 0 to max-dy point (crown → sole)
+      let splitIdx = 0;
+      for (let i = 1; i < pts.length; i++) {
+        if (pts[i][1] > pts[splitIdx][1]) splitIdx = i;
+      }
+      const rightHalf = pts.slice(0, splitIdx + 1);
+      // Left half: mirror the right half (negate dx), reversed (sole → crown)
+      const leftHalf = rightHalf.slice().reverse().map(p => [-p[0], p[1]]);
+      // Build flat array: right + left = closed bilateral polygon
+      const full = [];
+      for (const p of rightHalf) { full.push(p[0], p[1]); }
+      for (const p of leftHalf) { full.push(p[0], p[1]); }
+      newContourFlat = full;
+    } else {
+      // Full 360° contour — use as-is
+      newContourFlat = pts.flat();
+    }
+
     newLM = {};
     for (const lm of json.landmarks) {
       newLM[lm.name] = [lm.dx, lm.dy];

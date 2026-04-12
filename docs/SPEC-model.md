@@ -181,10 +181,13 @@ every section, its sub-models, fields, types, and constraints.
 
 **`Mirror(_Strict)`**
 
+Determines whether the contour is a 180° half-body (requiring consumer-
+side mirroring) or a full 360° traced outline.  See §7.2 for details.
+
 | Field | Type | Constraints | Description |
 |---|---|---|---|
-| `applied` | `bool` | required | Whether mirroring was applied |
-| `semantics` | `str` | required | What the mirror operation means |
+| `applied` | `bool` | required | `true` = 180° mode (right half only, mirror to render). `false` = 360° mode (full contour, use as-is). |
+| `semantics` | `str` | required | What the mirror operation means (e.g. `"right side mirrored to left"`) |
 | `description` | `str \| None` | optional | Human-readable note |
 
 **`CoordinateSystem(_Strict)`**
@@ -327,16 +330,30 @@ every section, its sub-models, fields, types, and constraints.
 Ordered sequence of `(dx, dy)` coordinates forming the **outer boundary**
 of the silhouette in head-unit space.
 
+**Coverage mode — 180° vs 360°:**
+
+The contour is always stored as a full closed loop, but the geometry it
+represents depends on `meta.mirror.applied`:
+
+| `mirror.applied` | Mode | Right half (0..split) | Left half (split+1..end) | Consumer responsibility |
+|---|---|---|---|---|
+| `true` | **180°** | Authoritative right-side geometry | Collapsed to midline (`dx ≈ 0`) | Mirror right half with negated `dx` to build bilateral silhouette |
+| `false` | **360°** | Full contour, first segment | Full contour, second segment | Use as-is — no mirroring needed |
+
+When `mirror.applied` is `true`, the left half is **not** usable
+geometry — it is a vertical line at `dx ≈ -0.013` tracing from sole
+back to crown along the midline.  Consumers MUST mirror the right half
+to produce the full bilateral outline.
+
 **Topology:**
 
-The contour is a closed loop with a right/left split:
+The contour is a closed loop with a right/left split.  The split index
+is the point of maximum `dy` (the sole):
 
 - **Right half** (indices `0` to `split_idx`): traces the outer edge of
-  the right side from crown (minimum `dy`) to sole (maximum `dy`).  The
-  split index is the point of maximum `dy`.
+  the right side from crown (minimum `dy`) to sole (maximum `dy`).
 - **Left half** (indices `split_idx+1` to end): traces back from sole to
-  crown.  When `meta.mirror.applied` is `true`, the left half is the
-  mirror reflection of the right half collapsed toward the midline.
+  crown.
 
 The right half may contain **re-entrant loops** where the contour traces
 around separated body parts (e.g., the arm gap between arm tip and

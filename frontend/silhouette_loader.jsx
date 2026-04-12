@@ -30,17 +30,31 @@ function normalize(raw) {
   const version = meta.schema_version || "unknown";
   const isV4 = !!raw.body_regions;
 
-  // Contour: right half only — split at the sole (max dy), not at length/2.
-  // The closed-loop contour traces crown→sole (right side) then sole→crown
-  // (left/mirrored side). The split index is where dy is maximal.
+  // Contour mode: 180° (mirrored) or 360° (full).
+  // When mirror.applied is true, only the right half (0..max-dy) is
+  // authoritative — the left half is collapsed to dx≈0.  The renderer
+  // must mirror the right half to build the bilateral silhouette.
+  // When mirror.applied is false, the full contour is the actual
+  // traced boundary and is used as-is.
   const contourRaw = raw.contour || [];
+  const mirrored = meta.mirror?.applied !== false; // default to mirrored
+
   let splitIdx = 0;
   for (let i = 1; i < contourRaw.length; i++) {
     if (contourRaw[i][1] > contourRaw[splitIdx][1]) splitIdx = i;
   }
-  const rightContour = contourRaw.slice(0, splitIdx + 1);
-  const contour = rightContour.filter((_,i) => i % 2 === 0 || i === rightContour.length - 1)
-    .map(([dx,dy]) => [Math.round(dx*1000)/1000, Math.round(dy*1000)/1000]);
+
+  let contour;
+  if (mirrored) {
+    // 180° mode: extract right half only, consumer mirrors
+    const rightContour = contourRaw.slice(0, splitIdx + 1);
+    contour = rightContour.filter((_,i) => i % 2 === 0 || i === rightContour.length - 1)
+      .map(([dx,dy]) => [Math.round(dx*1000)/1000, Math.round(dy*1000)/1000]);
+  } else {
+    // 360° mode: use full contour as-is
+    contour = contourRaw.filter((_,i) => i % 2 === 0 || i === contourRaw.length - 1)
+      .map(([dx,dy]) => [Math.round(dx*1000)/1000, Math.round(dy*1000)/1000]);
+  }
 
   // Strokes
   const strokes = (raw.strokes || []).map(s => {
@@ -196,7 +210,7 @@ function normalize(raw) {
   const gender = cls.gender?.label || "unknown";
   const view = cls.view?.label || "unknown";
 
-  return { version, isV4, contour, strokes, landmarks, pr, br, ar, wp, sd, sc, gl, vol, hull, bio, med, holes, surface, gender, view };
+  return { version, isV4, mirrored, contour, strokes, landmarks, pr, br, ar, wp, sd, sc, gl, vol, hull, bio, med, holes, surface, gender, view };
 }
 
 function Renderer({ data }) {
