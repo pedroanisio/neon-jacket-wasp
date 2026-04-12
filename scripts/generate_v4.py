@@ -463,7 +463,31 @@ def phase_05_proportion(data):
 
     prop["canonical_comparisons"] = [
         {
-            "system": "Loomis 8-head academic",
+            "system": "Chibi / super-deformed",
+            "total_heads": 2.5,
+            "landmark_positions_hu": {
+                "crown": 0.0, "chin": 1.0, "crotch": 1.5, "sole": 2.5,
+            },
+        },
+        {
+            "system": "Standard anime",
+            "total_heads": 6.5,
+            "landmark_positions_hu": {
+                "crown": 0.0, "chin": 1.0, "nipple_line": 1.8,
+                "navel": 2.8, "crotch": 3.5, "knee": 5.0, "sole": 6.5,
+            },
+        },
+        {
+            "system": "Academic realistic (Richer / Bammes)",
+            "total_heads": 7.5,
+            "landmark_positions_hu": {
+                "crown": 0.0, "chin": 1.0, "nipple_line": 2.0,
+                "navel": 3.0, "crotch": 3.75, "mid_thigh": 4.7,
+                "knee": 5.6, "mid_shin": 6.5, "sole": 7.5,
+            },
+        },
+        {
+            "system": "Loomis 8-head idealized",
             "total_heads": 8.0,
             "landmark_positions_hu": {
                 "crown": 0.0, "chin": 1.0, "nipple_line": 2.0,
@@ -478,6 +502,15 @@ def phase_05_proportion(data):
                 "crown": 0.0, "chin": 1.0, "nipple_line": 2.0,
                 "navel": 3.1, "crotch": 4.25, "mid_thigh": 5.3,
                 "knee": 6.4, "mid_shin": 7.45, "sole": 8.5,
+            },
+        },
+        {
+            "system": "Fashion (9-10 head)",
+            "total_heads": 9.5,
+            "landmark_positions_hu": {
+                "crown": 0.0, "chin": 1.0, "nipple_line": 2.1,
+                "navel": 3.2, "crotch": 4.5, "mid_thigh": 5.8,
+                "knee": 7.0, "mid_shin": 8.2, "sole": 9.5,
             },
         },
     ]
@@ -1285,11 +1318,8 @@ def phase_23_gesture_line(data, crown_dy, fig_height):
     contra = abs(np.mean([l["dx"] for l in upper]) - np.mean([l["dx"] for l in lower])) / fig_height
 
     data["gesture_line"] = {
-        "note": "Gesture / action line analysis — formalises the 'line of action' concept.",
-        "reference": [
-            "Loomis, A. 'Figure Drawing for All It\\'s Worth.' Viking, 1943.",
-            "Hampton, M. 'Figure Drawing: Design and Invention.' 2009.",
-        ],
+        "note": "PCA on landmark point cloud — captures tilt and elongation (renamed from gesture_line to principal_axes in schema).",
+        "reference": "Jolliffe, I.T. 'Principal Component Analysis.' 2nd ed., Springer, 2002.",
         "primary_axis": {
             "direction": [round(float(primary[0]), 6), round(float(primary[1]), 6)],
             "eigenvalue": round(float(eigenvalues[0]), 6),
@@ -1367,6 +1397,7 @@ def phase_24_curvature_scale_space(data, right_pts, right_dx, right_dy):
     data["curvature_scale_space"] = {
         "note": "Curvature Scale Space (CSS): κ at 5 Gaussian smoothing scales.",
         "computed_on": "right_half",
+        "seam_handling": "none",
         "reference": "Mokhtarian, F. & Mackworth, A. IEEE TPAMI 14(8):789–805, 1992.",
         "persistent_features": {
             "note": "dy locations appearing in top-5 across ≥2 scales. structural=true if ≥3.",
@@ -1663,6 +1694,164 @@ def phase_29_shape_complexity(data, right_pts, sym_all, env_dx, env_dy):
 
 
 # ═══════════════════════════════════════════════════════════════════
+# V2 PREPROCESSING
+# ═══════════════════════════════════════════════════════════════════
+
+_LANDMARK_DESCRIPTIONS = {
+    "crown": "Top of the head (minimum dy on right-side contour)",
+    "head_peak": "Widest point of the head",
+    "neck_valley": "Narrowest point at the neck",
+    "shoulder_peak": "Widest point at shoulder level",
+    "waist_valley": "Narrowest point of the waist",
+    "hip_peak": "Widest point at hip level",
+    "knee_valley": "Narrowest point at knee level",
+    "ankle_valley": "Narrowest point at ankle level",
+    "sole": "Bottom of the foot (maximum dy on right-side contour)",
+}
+
+_V2_PARAMETRIC_EXTRAS = {
+    "max_error", "mean_error", "n_original_points",
+    "n_parameters", "compression_ratio",
+}
+
+
+def _preprocess_v2_input(data):
+    """Normalise a v2 extraction dict so all pipeline phases can run.
+
+    Handles: missing crown/sole landmarks, bare stroke arrays,
+    flat measurements/symmetry, v2 meta layout, v2 proportion keys,
+    and v2 parametric extras.  Safe to call on already-preprocessed data.
+    """
+    contour = data["contour"]
+    right_pts = contour[:RIGHT_END]
+    names = {lm["name"] for lm in data["landmarks"]}
+
+    # ── Derive crown / sole from contour extrema ──
+    if "crown" not in names:
+        ci = min(range(len(right_pts)), key=lambda i: right_pts[i][1])
+        data["landmarks"].insert(0, {
+            "name": "crown",
+            "dy": round(right_pts[ci][1], 4),
+            "dx": round(right_pts[ci][0], 4),
+        })
+
+    if "sole" not in names:
+        si = max(range(len(right_pts)), key=lambda i: right_pts[i][1])
+        data["landmarks"].append({
+            "name": "sole",
+            "dy": round(right_pts[si][1], 4),
+            "dx": round(right_pts[si][0], 4),
+        })
+
+    # ── Add description to landmarks that lack it ──
+    for lm in data["landmarks"]:
+        if "description" not in lm:
+            lm["description"] = _LANDMARK_DESCRIPTIONS.get(
+                lm["name"], f"Landmark: {lm['name'].replace('_', ' ')}")
+
+    # ── Strip v2-only landmark fields (index, band_constrained) ──
+    for lm in data["landmarks"]:
+        for f in ("index", "band_constrained"):
+            lm.pop(f, None)
+
+    # ── Convert bare stroke arrays → structured objects ──
+    new_strokes = []
+    for i, stroke in enumerate(data["strokes"]):
+        if isinstance(stroke, list) and stroke and isinstance(stroke[0], list):
+            pts = stroke
+            dx_vals = [p[0] for p in pts]
+            dy_vals = [p[1] for p in pts]
+            new_strokes.append({
+                "id": i, "region": "unknown", "n_points": len(pts),
+                "bbox": {
+                    "dx_min": round(min(dx_vals), 4),
+                    "dx_max": round(max(dx_vals), 4),
+                    "dy_min": round(min(dy_vals), 4),
+                    "dy_max": round(max(dy_vals), 4),
+                },
+                "points": pts,
+            })
+        else:
+            new_strokes.append(stroke)
+    data["strokes"] = new_strokes
+
+    # ── Wrap flat measurements → {scanlines: ...} ──
+    if "scanlines" not in data["measurements"]:
+        data["measurements"] = {"scanlines": data["measurements"]}
+
+    # ── Wrap flat symmetry → {samples: ...} ──
+    if "samples" not in data["symmetry"]:
+        data["symmetry"] = {"samples": data["symmetry"]}
+
+    # ── Parametric: add dy_range, strip v2 extras ──
+    lm_dict = {lm["name"]: lm for lm in data["landmarks"]}
+    param = data["parametric"]
+    for seg in param["segments"]:
+        if "dy_range" not in seg:
+            s, e = lm_dict.get(seg["landmark_start"]), lm_dict.get(seg["landmark_end"])
+            if s and e:
+                seg["dy_range"] = [s["dy"], e["dy"]]
+            elif "coeffs_dy" in seg:
+                seg["dy_range"] = [seg["coeffs_dy"][0], seg["coeffs_dy"][-1]]
+        seg.pop("coeffs_dy", None)
+    for f in _V2_PARAMETRIC_EXTRAS:
+        param.pop(f, None)
+
+    # ── Meta: mirror bool → object, flat scores/timing → objects ──
+    meta = data["meta"]
+    if isinstance(meta.get("mirror"), bool):
+        applied = meta.pop("mirror")
+        meta["mirror"] = {
+            "applied": applied,
+            "semantics": "right side mirrored to left" if applied else "none",
+        }
+    if "scores" not in meta:
+        meta["scores"] = {
+            "scanline": meta.pop("score_scanline", 0.0),
+            "floodfill": meta.pop("score_floodfill", 0.0),
+            "direct": meta.pop("score_direct", 0.0),
+            "margin": meta.pop("score_margin", 0.0),
+        }
+    if "timing" not in meta:
+        meta["timing"] = {
+            "algo_elapsed_ms": meta.pop("algo_elapsed_ms", 0.0),
+            "total_elapsed_ms": meta.pop("total_elapsed_ms", 0.0),
+        }
+    if "coordinate_system" not in meta:
+        meta["coordinate_system"] = {
+            "dx": "horizontal distance from midline, right positive",
+            "dy": "vertical position, 0=crown, increasing downward",
+            "hu_definition": "head-units: 1 HU = crown-to-sole / head_count",
+        }
+
+    # ── Classification: fix v2 field names ──
+    cls = meta.get("classification", {})
+    hair = cls.get("hair_symmetry")
+    if isinstance(hair, dict) and "delta_hu" in hair:
+        hair.setdefault("raw_delta_hu", hair.pop("delta_hu"))
+    ann = cls.get("annotations")
+    if isinstance(ann, dict) and ann.get("label") not in ("single_figure", "multi_figure"):
+        ann["label"] = "single_figure"
+
+    # ── Proportion: head_count → head_count_total ──
+    prop = data["proportion"]
+    if "head_count" in prop and "head_count_total" not in prop:
+        prop["head_count_total"] = prop.pop("head_count")
+    crown_dy = lm_dict["crown"]["dy"]
+    sole_dy = lm_dict["sole"]["dy"]
+    fig_height = sole_dy - crown_dy
+    if "figure_height_total_hu" not in prop:
+        prop["figure_height_total_hu"] = round(fig_height, 4)
+    if "head_height_hu" not in prop and prop.get("head_count_total", 0) > 0:
+        prop["head_height_hu"] = round(fig_height / prop["head_count_total"], 4)
+    prop.pop("standardized_vector", None)
+
+    print(f"  Preprocessed: {len(data['landmarks'])} landmarks, "
+          f"{len(data['strokes'])} strokes, "
+          f"{len(data['measurements']['scanlines'])} scanlines")
+
+
+# ═══════════════════════════════════════════════════════════════════
 # MAIN
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1681,6 +1870,9 @@ def main():
     print(f"Loading {args.input}...")
     with open(args.input) as f:
         data = json.load(f)
+
+    # ── v2 preprocessing (normalise into the format phases expect) ─
+    _preprocess_v2_input(data)
 
     # ── Contour setup ──────────────────────────────────────────
     contour = np.array(data["contour"])

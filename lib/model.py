@@ -324,6 +324,7 @@ class Meta(_Strict):
     bounding_box_hu: BoundingBox
     sections: SectionInventory
     shape_prior: dict[str, Any] | None = None
+    binary_payload: str | None = None
     multi_figure_sheet: bool | None = None
     extracted_figure_index: int | None = Field(None, ge=0)
     extracted_figure_view: str | None = None
@@ -862,6 +863,7 @@ class ConvexHull(_Strict):
     note: str | None = None
     reference: str | None = None
     solidity_formula: str | None = None
+    boundary_convexity: float | None = Field(None, ge=0, le=1)
     hull_perimeter_hu: float | None = Field(None, ge=0)
     negative_space_area_hu2: float | None = Field(None, ge=0)
     hull_vertex_count: int | None = Field(None, ge=3)
@@ -869,7 +871,7 @@ class ConvexHull(_Strict):
 
 
 # ═══════════════════════════════════════════════════════════════
-# Gesture Line
+# Principal Axes (formerly gesture_line — P3-12)
 # ═══════════════════════════════════════════════════════════════
 
 
@@ -890,7 +892,13 @@ class LandmarkDeviation(_Strict):
     lateral_dev: float
 
 
-class GestureLine(_Strict):
+class PrincipalAxes(_Strict):
+    """PCA on contour/landmark point cloud — captures tilt and elongation.
+
+    Renamed from ``GestureLine`` per P3-12: PCA produces a straight axis,
+    not the curved 'line of action' that Loomis described.
+    """
+
     primary_axis: PrimaryAxis
     secondary_axis: SecondaryAxis
     lean_angle_deg: float
@@ -904,6 +912,33 @@ class GestureLine(_Strict):
     contrapposto_score: float | None = Field(None, ge=0)
     contrapposto_interpretation: str | None = None
     landmark_deviations: list[LandmarkDeviation] | None = None
+
+
+# Back-compat alias — existing code referencing GestureLine still works.
+GestureLine = PrincipalAxes
+
+
+# ═══════════════════════════════════════════════════════════════
+# Gesture Line (true medial-axis spline — P3-12)
+# ═══════════════════════════════════════════════════════════════
+
+GestureLineMethod = Literal[
+    "medial_axis_spline",
+    "joint_chain_spline",
+    "manual",
+]
+
+GestureCurvatureClass = Literal["C_curve", "S_curve", "straight", "complex"]
+
+
+class GestureLineSpline(_Strict):
+    """True gesture / line-of-action from the medial axis."""
+
+    method: GestureLineMethod
+    control_points: list[Point2d] = Field(min_length=2)
+    curvature_class: GestureCurvatureClass | None = None
+    max_lateral_deviation_hu: float | None = Field(None, ge=0)
+    note: str | None = None
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -945,11 +980,15 @@ class PersistentFeatures(_Strict):
     note: str | None = None
 
 
+SeamHandling = Literal["none", "blended", "windowed"]
+
+
 class CurvatureScaleSpace(_Strict):
     scales: list[CSSScale] = Field(min_length=1)
     note: str | None = None
     reference: str | None = None
     computed_on: ContourVariant | None = None
+    seam_handling: SeamHandling | None = None
     persistent_features: PersistentFeatures | None = None
 
 
@@ -1176,7 +1215,7 @@ class ShapeComplexity(_Strict):
 
 
 class SilhouetteV4(_Strict):
-    """Complete v4 silhouette analysis document (27 required sections)."""
+    """Complete v4 silhouette analysis document."""
 
     meta: Meta
     contour: list[Point2d] = Field(min_length=3)
@@ -1199,10 +1238,12 @@ class SilhouetteV4(_Strict):
     hu_moments: HuMoments
     turning_function: TurningFunction
     convex_hull: ConvexHull
-    gesture_line: GestureLine
+    # P3-12: renamed from gesture_line; accepts both names via alias
+    principal_axes: PrincipalAxes = Field(alias="gesture_line")
     curvature_scale_space: CurvatureScaleSpace
     style_deviation: StyleDeviation
     volumetric_estimates: VolumetricEstimates
     biomechanics: Biomechanics
     medial_axis: MedialAxis
     shape_complexity: ShapeComplexity
+    gesture_line_spline: GestureLineSpline | None = None

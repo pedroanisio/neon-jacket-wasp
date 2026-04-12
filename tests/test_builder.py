@@ -14,6 +14,7 @@ from lib.model import (
     ALL_ERROR_CLASSES,
     BioSegment,
     Biomechanics,
+    CanonicalComparison,
     Compactness,
     ContourNormals,
     ContourVariant,
@@ -23,12 +24,15 @@ from lib.model import (
     CurvatureScaleSpace,
     FourierDescriptors,
     FractalDimension,
+    GestureLine,
+    GestureLineSpline,
     HuConvention,
     HuMoments,
     Landmark,
     LLMErrorClass,
     Meta,
     PALS_LAW_VERSION,
+    PrincipalAxes,
     Rectangularity,
     SegmentEndpointConvention,
     ShapeComplexity,
@@ -1173,3 +1177,250 @@ class TestP2RectangularityFormula:
             formula="A_shape / A_MBR per Rosin (2003), must be in [0,1]",
         )
         assert "Rosin" in r.formula
+
+
+# ═══════════════════════════════════════════════════════════
+# P3 Regression tests — structural improvements
+# ═══════════════════════════════════════════════════════════
+
+_MINIMAL_PRINCIPAL_AXES = {
+    "primary_axis": {
+        "direction": (0.0, 1.0),
+        "eigenvalue": 0.95,
+        "explained_variance_ratio": 0.95,
+    },
+    "secondary_axis": {
+        "direction": (1.0, 0.0),
+        "eigenvalue": 0.05,
+    },
+    "lean_angle_deg": 2.3,
+    "gesture_energy": 0.05,
+}
+
+
+class TestP3PrincipalAxesRename:
+    """P3-12: gesture_line renamed to principal_axes; back-compat alias."""
+
+    def test_principal_axes_model(self):
+        pa = PrincipalAxes(**_MINIMAL_PRINCIPAL_AXES)
+        assert pa.lean_angle_deg == 2.3
+
+    def test_gesture_line_alias(self):
+        """GestureLine is an alias for PrincipalAxes."""
+        assert GestureLine is PrincipalAxes
+        gl = GestureLine(**_MINIMAL_PRINCIPAL_AXES)
+        assert isinstance(gl, PrincipalAxes)
+
+    def test_builder_gesture_line_backcompat(self):
+        """Builder.gesture_line() still works and maps to principal_axes."""
+        builder = SilhouetteBuilder()
+        builder.gesture_line(_MINIMAL_PRINCIPAL_AXES)
+        assert "principal_axes" in builder.set_sections()
+
+    def test_builder_principal_axes(self):
+        builder = SilhouetteBuilder()
+        builder.principal_axes(_MINIMAL_PRINCIPAL_AXES)
+        assert "principal_axes" in builder.set_sections()
+
+    def test_set_section_gesture_line_backcompat(self):
+        """set_section('gesture_line', ...) still works."""
+        builder = SilhouetteBuilder()
+        builder.set_section("gesture_line", _MINIMAL_PRINCIPAL_AXES)
+        assert "principal_axes" in builder.set_sections()
+
+    def test_json_alias_round_trip(self):
+        """JSON uses 'gesture_line' key (alias), model uses principal_axes."""
+        meta = _meta_builder().build()
+        sections = _minimal_sections()
+        builder = SilhouetteBuilder().meta(meta)
+        for name, data in sections.items():
+            builder.set_section(name, data)
+        doc = builder.build()
+        d = doc.to_dict()
+        # The alias means the JSON key is 'gesture_line'
+        assert "gesture_line" in d
+        # Round-trip works
+        reloaded = SilhouetteDocument.from_dict(d)
+        assert reloaded.model.principal_axes.lean_angle_deg == 2.3
+
+    def test_full_doc_missing_sections_count(self):
+        """28 required sections (gesture_line_spline is optional)."""
+        builder = SilhouetteBuilder()
+        assert len(builder.missing_sections()) == 28
+
+
+class TestP3GestureLineSpline:
+    """P3-12: New gesture_line_spline section from medial axis."""
+
+    def test_gesture_line_spline_model(self):
+        gls = GestureLineSpline(
+            method="medial_axis_spline",
+            control_points=[(0.0, 0.0), (0.1, 0.5), (0.0, 1.0)],
+            curvature_class="S_curve",
+            max_lateral_deviation_hu=0.12,
+        )
+        assert gls.method == "medial_axis_spline"
+        assert gls.curvature_class == "S_curve"
+        assert len(gls.control_points) == 3
+
+    def test_method_enum_values(self):
+        for m in ("medial_axis_spline", "joint_chain_spline", "manual"):
+            gls = GestureLineSpline(
+                method=m,
+                control_points=[(0.0, 0.0), (0.0, 1.0)],
+            )
+            assert gls.method == m
+
+    def test_curvature_class_enum(self):
+        for cc in ("C_curve", "S_curve", "straight", "complex"):
+            gls = GestureLineSpline(
+                method="medial_axis_spline",
+                control_points=[(0.0, 0.0), (0.0, 1.0)],
+                curvature_class=cc,
+            )
+            assert gls.curvature_class == cc
+
+    def test_rejects_invalid_method(self):
+        with pytest.raises(ValidationError):
+            GestureLineSpline(
+                method="bezier",
+                control_points=[(0.0, 0.0), (0.0, 1.0)],
+            )
+
+    def test_min_control_points(self):
+        with pytest.raises(ValidationError):
+            GestureLineSpline(
+                method="medial_axis_spline",
+                control_points=[(0.0, 0.0)],  # needs at least 2
+            )
+
+    def test_optional_on_silhouette_v4(self):
+        """gesture_line_spline is optional — not in missing_sections."""
+        builder = SilhouetteBuilder()
+        missing = builder.missing_sections()
+        assert "gesture_line_spline" not in missing
+
+    def test_builder_accepts_spline(self):
+        builder = SilhouetteBuilder()
+        builder.gesture_line_spline({
+            "method": "medial_axis_spline",
+            "control_points": [(0.0, 0.0), (0.0, 1.0)],
+            "curvature_class": "straight",
+        })
+        assert "gesture_line_spline" in builder.set_sections()
+
+
+class TestP3SeamHandling:
+    """P3-13: CurvatureScaleSpace must declare seam_handling."""
+
+    def test_seam_handling_field(self):
+        css = CurvatureScaleSpace(
+            scales=[{
+                "label": "raw", "sigma": 0, "zero_crossings": 5,
+                "mean_abs_kappa": 0.3, "max_abs_kappa": 1.5,
+            }],
+            seam_handling="none",
+        )
+        assert css.seam_handling == "none"
+
+    def test_seam_handling_all_values(self):
+        for v in ("none", "blended", "windowed"):
+            css = CurvatureScaleSpace(
+                scales=[{
+                    "label": "raw", "sigma": 0, "zero_crossings": 5,
+                    "mean_abs_kappa": 0.3, "max_abs_kappa": 1.5,
+                }],
+                seam_handling=v,
+            )
+            assert css.seam_handling == v
+
+    def test_seam_handling_optional(self):
+        css = CurvatureScaleSpace(
+            scales=[{
+                "label": "raw", "sigma": 0, "zero_crossings": 5,
+                "mean_abs_kappa": 0.3, "max_abs_kappa": 1.5,
+            }],
+        )
+        assert css.seam_handling is None
+
+    def test_rejects_invalid_seam_handling(self):
+        with pytest.raises(ValidationError):
+            CurvatureScaleSpace(
+                scales=[{
+                    "label": "raw", "sigma": 0, "zero_crossings": 5,
+                    "mean_abs_kappa": 0.3, "max_abs_kappa": 1.5,
+                }],
+                seam_handling="periodic",
+            )
+
+
+class TestP3CanonicalComparisons:
+    """P3-14: proportion.canonical_comparisons must support multiple canons."""
+
+    def test_canonical_comparison_model(self):
+        cc = CanonicalComparison(
+            system="Chibi / super-deformed",
+            total_heads=2.5,
+            landmark_positions_hu={"crown": 0.0, "sole": 2.5},
+        )
+        assert cc.total_heads == 2.5
+
+    def test_multiple_canons(self):
+        """At least 4 canon systems should be representable."""
+        systems = [
+            CanonicalComparison(system="Chibi", total_heads=2.5, landmark_positions_hu={"crown": 0}),
+            CanonicalComparison(system="Anime", total_heads=6.5, landmark_positions_hu={"crown": 0}),
+            CanonicalComparison(system="Realistic", total_heads=7.5, landmark_positions_hu={"crown": 0}),
+            CanonicalComparison(system="Loomis", total_heads=8.0, landmark_positions_hu={"crown": 0}),
+            CanonicalComparison(system="Fashion", total_heads=9.5, landmark_positions_hu={"crown": 0}),
+        ]
+        assert len(systems) >= 4
+
+
+class TestP3BoundaryConvexity:
+    """P3-15: ConvexHull must support optional boundary_convexity."""
+
+    def test_boundary_convexity_field(self):
+        ch = ConvexHull(
+            hull_area_hu2=1.2,
+            silhouette_area_hu2=0.85,
+            solidity=0.708,
+            convexity_deficiency=0.292,
+            boundary_convexity=0.92,
+        )
+        assert ch.boundary_convexity == 0.92
+
+    def test_boundary_convexity_optional(self):
+        ch = ConvexHull(
+            hull_area_hu2=1.0,
+            silhouette_area_hu2=0.8,
+            solidity=0.8,
+            convexity_deficiency=0.2,
+        )
+        assert ch.boundary_convexity is None
+
+    def test_boundary_convexity_range(self):
+        """Must be in [0, 1]."""
+        with pytest.raises(ValidationError):
+            ConvexHull(
+                hull_area_hu2=1.0, silhouette_area_hu2=0.8,
+                solidity=0.8, convexity_deficiency=0.2,
+                boundary_convexity=1.5,
+            )
+
+
+class TestP3BinaryPayload:
+    """P3-16: Meta must support optional binary_payload path."""
+
+    def test_binary_payload_field(self):
+        meta = (
+            _meta_builder()
+            .build()
+        )
+        assert meta.binary_payload is None
+
+    def test_binary_payload_set(self):
+        builder = _meta_builder()
+        builder._data["binary_payload"] = "data/contour.npy"
+        meta = builder.build()
+        assert meta.binary_payload == "data/contour.npy"

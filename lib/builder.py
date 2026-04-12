@@ -86,7 +86,7 @@ from lib.model import (
     ExtractionScores,
     FourierDescriptors,
     GenderClassification,
-    GestureLine,
+    GestureLineSpline,
     HairSymmetry,
     HuMoments,
     Landmark,
@@ -98,6 +98,7 @@ from lib.model import (
     Mirror,
     Parametric,
     Point2d,
+    PrincipalAxes,
     Proportion,
     SectionInventory,
     ShapeComplexity,
@@ -414,7 +415,9 @@ _SECTION_MODELS: dict[str, type] = {
     "hu_moments": HuMoments,
     "turning_function": TurningFunction,
     "convex_hull": ConvexHull,
-    "gesture_line": GestureLine,
+    "principal_axes": PrincipalAxes,
+    "gesture_line": PrincipalAxes,  # back-compat alias
+    "gesture_line_spline": GestureLineSpline,
     "curvature_scale_space": CurvatureScaleSpace,
     "style_deviation": StyleDeviation,
     "volumetric_estimates": VolumetricEstimates,
@@ -517,8 +520,15 @@ class SilhouetteBuilder:
     def convex_hull(self, value: ConvexHull | dict[str, Any]) -> SilhouetteBuilder:
         return self._set_object("convex_hull", value)
 
-    def gesture_line(self, value: GestureLine | dict[str, Any]) -> SilhouetteBuilder:
-        return self._set_object("gesture_line", value)
+    def principal_axes(self, value: PrincipalAxes | dict[str, Any]) -> SilhouetteBuilder:
+        return self._set_object("principal_axes", value)
+
+    def gesture_line(self, value: PrincipalAxes | dict[str, Any]) -> SilhouetteBuilder:
+        """Back-compat alias for ``principal_axes``."""
+        return self._set_object("principal_axes", value)
+
+    def gesture_line_spline(self, value: GestureLineSpline | dict[str, Any]) -> SilhouetteBuilder:
+        return self._set_object("gesture_line_spline", value)
 
     def curvature_scale_space(
         self, value: CurvatureScaleSpace | dict[str, Any]
@@ -564,7 +574,9 @@ class SilhouetteBuilder:
 
     def missing_sections(self) -> list[str]:
         """Return names of required sections not yet set."""
-        required = set(SilhouetteV4.model_fields.keys())
+        required = {
+            k for k, v in SilhouetteV4.model_fields.items() if v.is_required()
+        }
         return sorted(required - set(self._sections.keys()))
 
     def set_sections(self) -> list[str]:
