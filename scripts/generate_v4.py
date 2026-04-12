@@ -287,6 +287,8 @@ def phase_02_dense_scanlines(data, unique_dy, dx_deriv2, interp, sole_dy):
         if not np.isfinite(dx_val):
             prev_dx_val = None
             continue
+        # Clamp to zero: spline can overshoot to negative in re-entrant regions.
+        dx_val = max(dx_val, 0.0)
         entry = {
             "right_dx": round(dx_val, 4),
             "left_dx": round(dx_val, 4),
@@ -915,7 +917,7 @@ def phase_15_width_profile(data, interp, crown_dy, sole_dy):
     dy_dense = np.arange(crown_dy + 0.01, sole_dy, 0.01)
     dx_dense = np.array([width_at(interp, d) for d in dy_dense])
     valid = np.isfinite(dx_dense)
-    dy_v, dx_v = dy_dense[valid], dx_dense[valid]
+    dy_v, dx_v = dy_dense[valid], np.maximum(dx_dense[valid], 0.0)
 
     dx_d1 = np.gradient(dx_v, dy_v)
     dx_d2 = np.gradient(dx_d1, dy_v)

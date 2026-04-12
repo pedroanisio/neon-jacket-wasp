@@ -1531,9 +1531,6 @@ class TestScanlineEntryTopology:
         assert 0.3 < gap < 0.6, f"Expected ~0.43 HU gap, got {gap:.2f}"
 
 
-SAMPLE_JSON = Path(__file__).resolve().parent.parent / "data" / "output" / "generated_v4.json"
-
-
 @pytest.mark.skipif(
     not SAMPLE_JSON.exists(),
     reason="Sample pipeline output not available",

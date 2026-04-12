@@ -18708,10 +18708,10 @@
         "curvature": 169.8914
       },
       "3.50": {
-        "right_dx": -0.346,
-        "left_dx": -0.346,
-        "full_width_hu": -0.6921,
-        "d_width_d_dy": -28.6654,
+        "right_dx": 0.0,
+        "left_dx": 0.0,
+        "full_width_hu": 0.0,
+        "d_width_d_dy": -21.7448,
         "curvature": 276.9892,
         "contour_pairs": 6,
         "topology_detail": [
@@ -18745,7 +18745,7 @@
         "right_dx": 1.959,
         "left_dx": 1.959,
         "full_width_hu": 3.918,
-        "d_width_d_dy": 46.1009,
+        "d_width_d_dy": 39.1804,
         "curvature": -24.5857
       },
       "3.60": {
@@ -18812,17 +18812,17 @@
         ]
       },
       "3.75": {
-        "right_dx": -0.2372,
-        "left_dx": -0.2372,
-        "full_width_hu": -0.4744,
-        "d_width_d_dy": -21.2127,
+        "right_dx": 0.0,
+        "left_dx": 0.0,
+        "full_width_hu": 0.0,
+        "d_width_d_dy": -16.4687,
         "curvature": -595.6074
       },
       "3.80": {
-        "right_dx": -0.5836,
-        "left_dx": -0.5836,
-        "full_width_hu": -1.1672,
-        "d_width_d_dy": -6.9277,
+        "right_dx": 0.0,
+        "left_dx": 0.0,
+        "full_width_hu": 0.0,
+        "d_width_d_dy": 0.0,
         "curvature": -10.0041,
         "contour_pairs": 4,
         "topology_detail": [
@@ -18848,7 +18848,7 @@
         "right_dx": 0.3977,
         "left_dx": 0.3977,
         "full_width_hu": 0.7954,
-        "d_width_d_dy": 19.6261,
+        "d_width_d_dy": 7.9545,
         "curvature": 4.8689
       },
       "3.90": {
@@ -18963,10 +18963,10 @@
         "curvature": -342.4505
       },
       "4.20": {
-        "right_dx": -4.0189,
-        "left_dx": -4.0189,
-        "full_width_hu": -8.0377,
-        "d_width_d_dy": -99.6174,
+        "right_dx": 0.0,
+        "left_dx": 0.0,
+        "full_width_hu": 0.0,
+        "d_width_d_dy": -19.2403,
         "curvature": -3906.226,
         "contour_pairs": 5,
         "topology_detail": [
@@ -18993,17 +18993,17 @@
         ]
       },
       "4.25": {
-        "right_dx": -0.2754,
-        "left_dx": -0.2754,
-        "full_width_hu": -0.5508,
-        "d_width_d_dy": 74.8687,
+        "right_dx": 0.0,
+        "left_dx": 0.0,
+        "full_width_hu": 0.0,
+        "d_width_d_dy": 0.0,
         "curvature": -2930.8811
       },
       "4.30": {
         "right_dx": 0.8813,
         "left_dx": 0.8813,
         "full_width_hu": 1.7626,
-        "d_width_d_dy": 23.1338,
+        "d_width_d_dy": 17.6255,
         "curvature": 218.6196,
         "contour_pairs": 4,
         "topology_detail": [
@@ -33254,7 +33254,7 @@
         "dx": 0.3938,
         "full_width": 0.7877,
         "slope": 9.9676,
-        "curvature": -536.5467
+        "curvature": 333.118
       },
       {
         "dy": 2.565,
@@ -33286,10 +33286,10 @@
       },
       {
         "dy": 2.765,
-        "dx": -0.0068,
-        "full_width": -0.0135,
-        "slope": -100.3451,
-        "curvature": 4525.2666
+        "dx": 0.0,
+        "full_width": 0.0,
+        "slope": -6.9465,
+        "curvature": 4491.5018
       },
       {
         "dy": 2.815,
@@ -33330,7 +33330,7 @@
         "dy": 3.065,
         "dx": 0.6265,
         "full_width": 1.2529,
-        "slope": -37.0058,
+        "slope": -28.0262,
         "curvature": 995.0169
       },
       {
@@ -33338,13 +33338,13 @@
         "dx": 2.1721,
         "full_width": 4.3442,
         "slope": 27.2456,
-        "curvature": -9727.7942
+        "curvature": -9345.048
       },
       {
         "dy": 3.165,
         "dx": 0.5363,
         "full_width": 1.0725,
-        "slope": -43.0033,
+        "slope": -42.203,
         "curvature": 5037.9387
       },
       {
@@ -33366,13 +33366,13 @@
         "dx": 0.627,
         "full_width": 1.2539,
         "slope": -9.4578,
-        "curvature": -3939.37
+        "curvature": -1638.5796
       },
       {
         "dy": 3.365,
         "dx": 1.4187,
         "full_width": 2.8374,
-        "slope": 71.1862,
+        "slope": 24.7716,
         "curvature": 9530.4079
       },
       {
@@ -33394,7 +33394,7 @@
         "dx": 3.0074,
         "full_width": 6.0149,
         "slope": -56.7807,
-        "curvature": -9969.682
+        "curvature": -9141.8809
       },
       {
         "dy": 3.565,
@@ -33407,36 +33407,36 @@
         "dy": 3.615,
         "dx": 0.6932,
         "full_width": 1.3864,
-        "slope": -113.4085,
-        "curvature": -3205.5874
+        "slope": -81.0882,
+        "curvature": -2687.2427
       },
       {
         "dy": 3.665,
         "dx": 1.0374,
         "full_width": 2.0748,
-        "slope": -1.1875,
+        "slope": -0.0,
         "curvature": -1393.5737
       },
       {
         "dy": 3.715,
-        "dx": -0.0,
-        "full_width": -0.0001,
-        "slope": -45.9621,
-        "curvature": 1129.7644
+        "dx": 0.0,
+        "full_width": 0.0,
+        "slope": -21.1647,
+        "curvature": 1825.2983
       },
       {
         "dy": 3.765,
-        "dx": -0.8821,
-        "full_width": -1.7642,
+        "dx": 0.0,
+        "full_width": 0.0,
         "slope": -4.901,
-        "curvature": 1695.1624
+        "curvature": 0.0
       },
       {
         "dy": 3.815,
-        "dx": -0.258,
-        "full_width": -0.5159,
+        "dx": 0.0,
+        "full_width": 0.0,
         "slope": 40.0831,
-        "curvature": 1854.8672
+        "curvature": 1247.4208
       },
       {
         "dy": 3.865,
@@ -34491,7 +34491,7 @@
         "note": "Local width peaks — shoulders, hips, calves, armor plates"
       },
       "minima": {
-        "count": 71,
+        "count": 60,
         "points": [
           {
             "dy": 1.265,
@@ -34515,13 +34515,13 @@
             "dy": 2.515,
             "dx": 0.3938,
             "full_width": 0.7877,
-            "prominence": 0.6445
+            "prominence": 0.3938
           },
           {
             "dy": 2.535,
-            "dx": -0.3479,
-            "full_width": -0.6957,
-            "prominence": 0.7417
+            "dx": 0.0,
+            "full_width": 0.0,
+            "prominence": 0.3938
           },
           {
             "dy": 2.555,
@@ -34569,19 +34569,13 @@
             "dy": 2.735,
             "dx": 0.547,
             "full_width": 1.094,
-            "prominence": 0.207
-          },
-          {
-            "dy": 2.775,
-            "dx": -1.868,
-            "full_width": -3.7359,
-            "prominence": 2.3767
+            "prominence": 0.0383
           },
           {
             "dy": 2.795,
             "dx": 0.5087,
             "full_width": 1.0173,
-            "prominence": 0.381
+            "prominence": 0.0383
           },
           {
             "dy": 2.815,
@@ -34626,28 +34620,16 @@
             "prominence": 0.1618
           },
           {
-            "dy": 3.075,
-            "dx": -0.1796,
-            "full_width": -0.3592,
-            "prominence": 0.0265
-          },
-          {
-            "dy": 3.095,
-            "dx": -0.1531,
-            "full_width": -0.3062,
-            "prominence": 0.0265
-          },
-          {
             "dy": 3.135,
             "dx": 0.6062,
             "full_width": 1.2124,
-            "prominence": 0.6222
+            "prominence": 0.6062
           },
           {
             "dy": 3.175,
-            "dx": -0.016,
-            "full_width": -0.032,
-            "prominence": 0.6222
+            "dx": 0.0,
+            "full_width": 0.0,
+            "prominence": 0.6062
           },
           {
             "dy": 3.195,
@@ -34693,15 +34675,15 @@
           },
           {
             "dy": 3.495,
-            "dx": -0.3311,
-            "full_width": -0.6622,
-            "prominence": 0.7321
+            "dx": 0.0,
+            "full_width": 0.0,
+            "prominence": 0.401
           },
           {
             "dy": 3.525,
             "dx": 0.401,
             "full_width": 0.802,
-            "prominence": 0.6734
+            "prominence": 0.401
           },
           {
             "dy": 3.545,
@@ -34719,61 +34701,13 @@
             "dy": 3.595,
             "dx": 0.3115,
             "full_width": 0.623,
-            "prominence": 0.6235
-          },
-          {
-            "dy": 3.625,
-            "dx": -0.6464,
-            "full_width": -1.2928,
-            "prominence": 0.352
-          },
-          {
-            "dy": 3.655,
-            "dx": -0.2944,
-            "full_width": -0.5888,
-            "prominence": 0.0237
-          },
-          {
-            "dy": 3.675,
-            "dx": -0.3181,
-            "full_width": -0.6363,
-            "prominence": 0.0237
-          },
-          {
-            "dy": 3.695,
-            "dx": -0.2783,
-            "full_width": -0.5566,
-            "prominence": 0.0398
-          },
-          {
-            "dy": 3.725,
-            "dx": -0.4959,
-            "full_width": -0.9919,
-            "prominence": 0.2176
-          },
-          {
-            "dy": 3.745,
-            "dx": -0.9623,
-            "full_width": -1.9246,
-            "prominence": 0.0802
-          },
-          {
-            "dy": 3.765,
-            "dx": -0.8821,
-            "full_width": -1.7642,
-            "prominence": 0.0802
-          },
-          {
-            "dy": 3.785,
-            "dx": -0.1238,
-            "full_width": -0.2476,
-            "prominence": 0.1342
+            "prominence": 0.3115
           },
           {
             "dy": 3.855,
             "dx": 0.1041,
             "full_width": 0.2082,
-            "prominence": 0.377
+            "prominence": 0.1041
           },
           {
             "dy": 3.875,
@@ -34924,18 +34858,18 @@
       }
     },
     "statistics": {
-      "mean_dx": 0.7813,
-      "std_dx": 0.4692,
+      "mean_dx": 0.7931,
+      "std_dx": 0.4371,
       "max_dx": 7.2373,
       "max_dx_dy": 4.195,
-      "min_dx": -1.868,
-      "min_dx_dy": 2.775,
-      "mean_full_width": 1.5625
+      "min_dx": 0.0,
+      "min_dx_dy": 2.535,
+      "mean_full_width": 1.5863
     }
   },
   "area_profile": {
     "note": "Silhouette area computed as the integral of bilateral width (2·dx) with respect to dy. Units are HU².",
-    "total_area_hu2": 12.3949,
+    "total_area_hu2": 12.5096,
     "per_region": [
       {
         "name": "cranium",
@@ -34945,7 +34879,7 @@
         ],
         "height_hu": 0.6096,
         "area_hu2": 0.4918,
-        "area_fraction": 0.0397,
+        "area_fraction": 0.0393,
         "mean_full_width_hu": 0.8748,
         "max_full_width_hu": 1.0956,
         "aspect_ratio": 0.6969
@@ -34958,7 +34892,7 @@
         ],
         "height_hu": 0.6449,
         "area_hu2": 0.5934,
-        "area_fraction": 0.0479,
+        "area_fraction": 0.0474,
         "mean_full_width_hu": 0.9815,
         "max_full_width_hu": 1.101,
         "aspect_ratio": 0.6571
@@ -34971,7 +34905,7 @@
         ],
         "height_hu": 0.6715,
         "area_hu2": 1.0323,
-        "area_fraction": 0.0833,
+        "area_fraction": 0.0825,
         "mean_full_width_hu": 1.5686,
         "max_full_width_hu": 1.9952,
         "aspect_ratio": 0.4281
@@ -34984,7 +34918,7 @@
         ],
         "height_hu": 0.5116,
         "area_hu2": 0.9278,
-        "area_fraction": 0.0749,
+        "area_fraction": 0.0742,
         "mean_full_width_hu": 2.0621,
         "max_full_width_hu": 2.134,
         "aspect_ratio": 0.2481
@@ -34997,7 +34931,7 @@
         ],
         "height_hu": 0.2608,
         "area_hu2": 0.2661,
-        "area_fraction": 0.0215,
+        "area_fraction": 0.0213,
         "mean_full_width_hu": 1.3738,
         "max_full_width_hu": 2.0766,
         "aspect_ratio": 0.1898
@@ -35009,11 +34943,11 @@
           3.9567
         ],
         "height_hu": 1.2533,
-        "area_hu2": 2.1592,
-        "area_fraction": 0.1742,
-        "mean_full_width_hu": 1.8165,
+        "area_hu2": 2.2739,
+        "area_fraction": 0.1818,
+        "mean_full_width_hu": 1.9083,
         "max_full_width_hu": 6.0148,
-        "aspect_ratio": 0.6899
+        "aspect_ratio": 0.6568
       },
       {
         "name": "upper_leg",
@@ -35023,7 +34957,7 @@
         ],
         "height_hu": 1.3198,
         "area_hu2": 2.2024,
-        "area_fraction": 0.1777,
+        "area_fraction": 0.1761,
         "mean_full_width_hu": 1.6831,
         "max_full_width_hu": 2.5912,
         "aspect_ratio": 0.7841
@@ -35036,7 +34970,7 @@
         ],
         "height_hu": 2.105,
         "area_hu2": 3.1366,
-        "area_fraction": 0.2531,
+        "area_fraction": 0.2507,
         "mean_full_width_hu": 1.5293,
         "max_full_width_hu": 1.6052,
         "aspect_ratio": 1.3764
@@ -35049,7 +34983,7 @@
         ],
         "height_hu": 0.6186,
         "area_hu2": 0.9712,
-        "area_fraction": 0.0784,
+        "area_fraction": 0.0776,
         "mean_full_width_hu": 1.7655,
         "max_full_width_hu": 1.98,
         "aspect_ratio": 0.3504
@@ -35066,108 +35000,108 @@
         "landmark": "head_peak",
         "dy": 0.6146,
         "cumulative_area_hu2": 0.4918,
-        "fraction_of_total": 0.0397
+        "fraction_of_total": 0.0393
       },
       {
         "landmark": "chin",
         "dy": 1.2438,
         "cumulative_area_hu2": 1.1401,
-        "fraction_of_total": 0.092
+        "fraction_of_total": 0.0911
       },
       {
         "landmark": "neck_valley",
         "dy": 1.2595,
         "cumulative_area_hu2": 1.1401,
-        "fraction_of_total": 0.092
+        "fraction_of_total": 0.0911
       },
       {
         "landmark": "trapezius_peak",
         "dy": 2.2022,
         "cumulative_area_hu2": 2.7079,
-        "fraction_of_total": 0.2185
+        "fraction_of_total": 0.2165
       },
       {
         "landmark": "shoulder_peak",
         "dy": 2.2926,
         "cumulative_area_hu2": 2.9154,
-        "fraction_of_total": 0.2352
+        "fraction_of_total": 0.2331
       },
       {
         "landmark": "chest_inflection",
         "dy": 2.5468,
         "cumulative_area_hu2": 3.4097,
-        "fraction_of_total": 0.2751
+        "fraction_of_total": 0.2726
       },
       {
         "landmark": "armpit_valley",
         "dy": 2.5981,
         "cumulative_area_hu2": 3.4716,
-        "fraction_of_total": 0.2801
+        "fraction_of_total": 0.2775
       },
       {
         "landmark": "waist_valley",
         "dy": 2.7034,
         "cumulative_area_hu2": 3.6042,
-        "fraction_of_total": 0.2908
+        "fraction_of_total": 0.2881
       },
       {
         "landmark": "navel_estimate",
         "dy": 3.2911,
-        "cumulative_area_hu2": 4.6462,
-        "fraction_of_total": 0.3748
+        "cumulative_area_hu2": 4.6469,
+        "fraction_of_total": 0.3715
       },
       {
         "landmark": "hip_peak",
         "dy": 3.9567,
-        "cumulative_area_hu2": 5.8291,
-        "fraction_of_total": 0.4703
+        "cumulative_area_hu2": 5.9438,
+        "fraction_of_total": 0.4751
       },
       {
         "landmark": "mid_thigh",
         "dy": 4.6166,
-        "cumulative_area_hu2": 7.1621,
-        "fraction_of_total": 0.5778
+        "cumulative_area_hu2": 7.2768,
+        "fraction_of_total": 0.5817
       },
       {
         "landmark": "thigh_narrowing",
         "dy": 4.8003,
-        "cumulative_area_hu2": 7.3955,
-        "fraction_of_total": 0.5967
+        "cumulative_area_hu2": 7.5102,
+        "fraction_of_total": 0.6004
       },
       {
         "landmark": "knee_valley",
         "dy": 5.2765,
-        "cumulative_area_hu2": 8.1362,
-        "fraction_of_total": 0.6564
+        "cumulative_area_hu2": 8.2509,
+        "fraction_of_total": 0.6596
       },
       {
         "landmark": "calf_peak",
         "dy": 6.0967,
-        "cumulative_area_hu2": 9.3436,
-        "fraction_of_total": 0.7538
+        "cumulative_area_hu2": 9.4583,
+        "fraction_of_total": 0.7561
       },
       {
         "landmark": "mid_shin",
         "dy": 6.329,
-        "cumulative_area_hu2": 9.74,
-        "fraction_of_total": 0.7858
+        "cumulative_area_hu2": 9.8547,
+        "fraction_of_total": 0.7878
       },
       {
         "landmark": "ankle_valley",
         "dy": 7.3815,
-        "cumulative_area_hu2": 11.3452,
-        "fraction_of_total": 0.9153
+        "cumulative_area_hu2": 11.4599,
+        "fraction_of_total": 0.9161
       },
       {
         "landmark": "boot_top",
         "dy": 7.9093,
-        "cumulative_area_hu2": 12.1982,
-        "fraction_of_total": 0.9841
+        "cumulative_area_hu2": 12.3128,
+        "fraction_of_total": 0.9843
       },
       {
         "landmark": "sole",
         "dy": 8.0001,
-        "cumulative_area_hu2": 12.3949,
+        "cumulative_area_hu2": 12.5096,
         "fraction_of_total": 1.0
       }
     ]
@@ -36000,10 +35934,10 @@
     "solidity_formula": "A_shape / A_hull",
     "hull_area_hu2": 16.8553,
     "hull_perimeter_hu": 18.7566,
-    "silhouette_area_hu2": 12.3949,
-    "negative_space_area_hu2": 4.4604,
-    "solidity": 0.7354,
-    "convexity_deficiency": 0.2646,
+    "silhouette_area_hu2": 12.5096,
+    "negative_space_area_hu2": 4.3457,
+    "solidity": 0.7422,
+    "convexity_deficiency": 0.2578,
     "hull_vertex_count": 126,
     "concavities": {
       "threshold_hu": 0.1,
@@ -37448,78 +37382,78 @@
       "figure_height_hu": 7.9951
     },
     "cylindrical": {
-      "volume_hu3": 18.4234,
-      "volume_cm3": 177111.0,
-      "volume_liters": 177.11,
+      "volume_hu3": 18.2907,
+      "volume_cm3": 175835.5,
+      "volume_liters": 175.84,
       "method": "V = π ∫ dx² dy"
     },
     "ellipsoidal": {
-      "volume_hu3": 9.2117,
-      "volume_cm3": 88555.5,
-      "volume_liters": 88.56,
+      "volume_hu3": 9.1454,
+      "volume_cm3": 87917.7,
+      "volume_liters": 87.92,
       "method": "V = (π/2) ∫ dx² dy"
     },
     "pappus": {
-      "volume_hu3": 36.8469,
-      "volume_cm3": 354222.1,
-      "volume_liters": 354.22,
+      "volume_hu3": 36.5815,
+      "volume_cm3": 351670.9,
+      "volume_liters": 351.67,
       "method": "V = 2π · x̄ · A_right_half",
-      "centroid_x_hu": 0.9463
+      "centroid_x_hu": 0.9308
     },
     "per_region": [
       {
         "name": "cranium",
         "volume_hu3_cylindrical": 0.3672,
         "volume_cm3_cylindrical": 3530.2,
-        "fraction": 0.0199
+        "fraction": 0.0201
       },
       {
         "name": "face",
         "volume_hu3_cylindrical": 0.4665,
         "volume_cm3_cylindrical": 4484.8,
-        "fraction": 0.0253
+        "fraction": 0.0255
       },
       {
         "name": "neck",
         "volume_hu3_cylindrical": 1.4112,
         "volume_cm3_cylindrical": 13566.7,
-        "fraction": 0.0766
+        "fraction": 0.0772
       },
       {
         "name": "shoulders",
         "volume_hu3_cylindrical": 1.5033,
         "volume_cm3_cylindrical": 14451.6,
-        "fraction": 0.0816
+        "fraction": 0.0822
       },
       {
         "name": "upper_torso",
         "volume_hu3_cylindrical": 0.3075,
         "volume_cm3_cylindrical": 2956.0,
-        "fraction": 0.0167
+        "fraction": 0.0168
       },
       {
         "name": "lower_torso",
-        "volume_hu3_cylindrical": 5.339,
-        "volume_cm3_cylindrical": 51326.1,
-        "fraction": 0.2898
+        "volume_hu3_cylindrical": 5.2064,
+        "volume_cm3_cylindrical": 50050.5,
+        "fraction": 0.2846
       },
       {
         "name": "upper_leg",
         "volume_hu3_cylindrical": 3.0592,
         "volume_cm3_cylindrical": 29409.2,
-        "fraction": 0.166
+        "fraction": 0.1673
       },
       {
         "name": "lower_leg",
         "volume_hu3_cylindrical": 3.7731,
         "volume_cm3_cylindrical": 36272.4,
-        "fraction": 0.2048
+        "fraction": 0.2063
       },
       {
         "name": "foot",
         "volume_hu3_cylindrical": 1.3567,
         "volume_cm3_cylindrical": 13042.2,
-        "fraction": 0.0736
+        "fraction": 0.0742
       }
     ]
   },
@@ -37660,12 +37594,12 @@
   "medial_axis": {
     "note": "Approximate medial axis of the bilateral silhouette.",
     "thickness_statistics": {
-      "mean_radius_hu": 0.7781,
-      "min_radius_hu": -0.8821,
-      "min_radius_dy": 3.765,
+      "mean_radius_hu": 0.7852,
+      "min_radius_hu": 0.0,
+      "min_radius_dy": 2.765,
       "max_radius_hu": 3.0074,
       "max_radius_dy": 3.515,
-      "thinning_ratio": -0.2933,
+      "thinning_ratio": 0.0,
       "note": "thinning_ratio = min/max radius."
     },
     "branch_points": {
@@ -38017,8 +37951,8 @@
         {
           "dy": 2.765,
           "medial_dx": 0.0,
-          "inscribed_radius": -0.0068,
-          "inscribed_diameter": -0.0136
+          "inscribed_radius": 0.0,
+          "inscribed_diameter": 0.0
         },
         {
           "dy": 2.815,
@@ -38131,20 +38065,20 @@
         {
           "dy": 3.715,
           "medial_dx": 0.0,
-          "inscribed_radius": -0.0,
-          "inscribed_diameter": -0.0
+          "inscribed_radius": 0.0,
+          "inscribed_diameter": 0.0
         },
         {
           "dy": 3.765,
           "medial_dx": 0.0,
-          "inscribed_radius": -0.8821,
-          "inscribed_diameter": -1.7642
+          "inscribed_radius": 0.0,
+          "inscribed_diameter": 0.0
         },
         {
           "dy": 3.815,
           "medial_dx": 0.0,
-          "inscribed_radius": -0.258,
-          "inscribed_diameter": -0.516
+          "inscribed_radius": 0.0,
+          "inscribed_diameter": 0.0
         },
         {
           "dy": 3.865,
@@ -38664,10 +38598,10 @@
       "note": "1.0 = smooth curve, 1.2+ = significant fine structure."
     },
     "compactness": {
-      "value": 0.3275,
+      "value": 0.3305,
       "formula": "4π·A / P²",
       "perimeter_used": "original",
-      "computed_area_hu2": 12.3949,
+      "computed_area_hu2": 12.5096,
       "computed_perimeter_hu": 21.8098,
       "note": "Isoperimetric ratio. Circle=1.0. Uses total_perimeter_hu from contour_quality."
     },
