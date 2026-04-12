@@ -15,15 +15,24 @@ from lib.model import (
     BioSegment,
     Biomechanics,
     Compactness,
+    ContourNormals,
     ContourVariant,
     ConvexHull,
+    CoordinateSystem,
+    Curvature,
+    CurvatureScaleSpace,
+    FourierDescriptors,
     FractalDimension,
+    HuConvention,
+    HuMoments,
     Landmark,
     LLMErrorClass,
     Meta,
     PALS_LAW_VERSION,
     Rectangularity,
     SegmentEndpointConvention,
+    ShapeComplexity,
+    StyleDeviation,
     TurningFunction,
 )
 
@@ -960,3 +969,207 @@ class TestContourVariantType:
         for v in ("right_half", "mirrored_full", "original"):
             c = Compactness(value=0.5, perimeter_used=v)
             assert c.perimeter_used == v
+
+
+# ═══════════════════════════════════════════════════════════
+# P2 Regression tests — consistency & documentation
+# ═══════════════════════════════════════════════════════════
+
+_MINIMAL_CURVATURE_SAMPLES = [
+    {"dy": 0.0, "dx": 0.0, "kappa": 0.1},
+    {"dy": 1.0, "dx": 0.0, "kappa": -0.1},
+]
+
+
+class TestP2ComputedOnAllSections:
+    """P2-7: Every contour-consuming section must accept computed_on."""
+
+    def test_curvature_computed_on(self):
+        c = Curvature(
+            sample_count=2,
+            samples=_MINIMAL_CURVATURE_SAMPLES,
+            computed_on="right_half",
+        )
+        assert c.computed_on == "right_half"
+
+    def test_fourier_descriptors_computed_on(self):
+        fd = FourierDescriptors(
+            n_harmonics=1,
+            perimeter_hu=4.0,
+            coefficients=[{
+                "harmonic": 1, "a_x": 1.0, "b_x": 0.0,
+                "a_y": 0.0, "b_y": 1.0, "amplitude": 1.0,
+            }],
+            computed_on="right_half",
+        )
+        assert fd.computed_on == "right_half"
+
+    def test_contour_normals_computed_on(self):
+        cn = ContourNormals(
+            sample_step=5, sample_count=1, full_point_count=100,
+            samples=[{"index": 0, "dx": 0.0, "dy": 0.0, "nx": 1.0, "ny": 0.0}],
+            computed_on="right_half",
+        )
+        assert cn.computed_on == "right_half"
+
+    def test_hu_moments_computed_on_enum(self):
+        """HuMoments.computed_on was tightened from str to ContourVariant."""
+        hm = HuMoments(
+            raw=(1, 0.5, 0.3, 0.2, 0.1, 0.05, 0.01),
+            log_transformed=(0, -0.3, -0.5, -0.7, -1, -1.3, -2),
+            centroid={"dx": 0.0, "dy": 0.5},
+            computed_on="mirrored_full",
+        )
+        assert hm.computed_on == "mirrored_full"
+
+    def test_hu_moments_rejects_old_string(self):
+        """Old free-text computed_on values must now fail validation."""
+        with pytest.raises(ValidationError):
+            HuMoments(
+                raw=(1, 0.5, 0.3, 0.2, 0.1, 0.05, 0.01),
+                log_transformed=(0, -0.3, -0.5, -0.7, -1, -1.3, -2),
+                centroid={"dx": 0.0, "dy": 0.5},
+                computed_on="bilateral_symmetric_silhouette",
+            )
+
+    def test_curvature_scale_space_computed_on(self):
+        css = CurvatureScaleSpace(
+            scales=[{
+                "label": "raw", "sigma": 0, "zero_crossings": 5,
+                "mean_abs_kappa": 0.3, "max_abs_kappa": 1.5,
+            }],
+            computed_on="right_half",
+        )
+        assert css.computed_on == "right_half"
+
+    def test_shape_complexity_computed_on(self):
+        sc = ShapeComplexity(
+            curvature_entropy={"value": 3.5},
+            fractal_dimension={"value": 1.2, "method": "box_counting"},
+            compactness={"value": 0.7},
+            eccentricity={"value": 0.9},
+            computed_on="right_half",
+        )
+        assert sc.computed_on == "right_half"
+
+    def test_computed_on_optional_everywhere(self):
+        """All computed_on fields default to None for backward compat."""
+        c = Curvature(sample_count=2, samples=_MINIMAL_CURVATURE_SAMPLES)
+        assert c.computed_on is None
+
+    def test_rejects_invalid_variant(self):
+        with pytest.raises(ValidationError):
+            Curvature(
+                sample_count=2,
+                samples=_MINIMAL_CURVATURE_SAMPLES,
+                computed_on="full_contour",
+            )
+
+
+class TestP2AmplitudeFormula:
+    """P2-8: FourierDescriptors must have amplitude_formula field."""
+
+    def test_amplitude_formula_present(self):
+        fd = FourierDescriptors(
+            n_harmonics=1,
+            perimeter_hu=4.0,
+            coefficients=[{
+                "harmonic": 1, "a_x": 1.0, "b_x": 0.0,
+                "a_y": 0.0, "b_y": 1.0, "amplitude": 1.0,
+            }],
+            amplitude_formula="frobenius_norm: sqrt(a_x^2 + b_x^2 + a_y^2 + b_y^2)",
+        )
+        assert "frobenius" in fd.amplitude_formula
+
+    def test_amplitude_formula_optional(self):
+        fd = FourierDescriptors(
+            n_harmonics=1,
+            perimeter_hu=4.0,
+            coefficients=[{
+                "harmonic": 1, "a_x": 1.0, "b_x": 0.0,
+                "a_y": 0.0, "b_y": 1.0, "amplitude": 1.0,
+            }],
+        )
+        assert fd.amplitude_formula is None
+
+
+class TestP2HuConvention:
+    """P2-9: CoordinateSystem must support hu_convention and conversion factor."""
+
+    def test_hu_convention_field(self):
+        cs = CoordinateSystem(
+            dx="right positive", dy="down positive",
+            hu_definition="fraction of figure height",
+            hu_convention="crown_to_neck_valley",
+            hu_to_standard_factor=1.1765,
+        )
+        assert cs.hu_convention == "crown_to_neck_valley"
+        assert cs.hu_to_standard_factor == 1.1765
+
+    def test_hu_convention_all_values(self):
+        for v in ("crown_to_chin", "crown_to_neck_valley", "crown_to_c7", "custom"):
+            cs = CoordinateSystem(
+                dx="x", dy="y", hu_definition="hu",
+                hu_convention=v,
+            )
+            assert cs.hu_convention == v
+
+    def test_hu_convention_optional(self):
+        cs = CoordinateSystem(dx="x", dy="y", hu_definition="hu")
+        assert cs.hu_convention is None
+        assert cs.hu_to_standard_factor is None
+
+    def test_rejects_invalid_convention(self):
+        with pytest.raises(ValidationError):
+            CoordinateSystem(
+                dx="x", dy="y", hu_definition="hu",
+                hu_convention="forehead_to_chin",
+            )
+
+    def test_factor_must_be_positive(self):
+        with pytest.raises(ValidationError):
+            CoordinateSystem(
+                dx="x", dy="y", hu_definition="hu",
+                hu_convention="crown_to_chin",
+                hu_to_standard_factor=-1.0,
+            )
+
+
+class TestP2NormalizedHu:
+    """P2-10: StyleDeviation must declare whether HU values are normalized."""
+
+    def test_normalized_flag_false(self):
+        sd = StyleDeviation(
+            canon="Loomis",
+            position_deviations=[{
+                "landmark": "crown", "canon_name": "crown",
+                "measured_fraction": 0.0, "canon_fraction": 0.0,
+                "deviation": 0.0,
+            }],
+            l2_stylisation_distance=0.12,
+            normalized_to_standard_hu=False,
+        )
+        assert sd.normalized_to_standard_hu is False
+
+    def test_normalized_flag_optional(self):
+        sd = StyleDeviation(
+            canon="Loomis",
+            position_deviations=[{
+                "landmark": "crown", "canon_name": "crown",
+                "measured_fraction": 0.0, "canon_fraction": 0.0,
+                "deviation": 0.0,
+            }],
+            l2_stylisation_distance=0.0,
+        )
+        assert sd.normalized_to_standard_hu is None
+
+
+class TestP2RectangularityFormula:
+    """P2-11: Rectangularity must document the formula convention."""
+
+    def test_formula_field_accepts_rosin(self):
+        r = Rectangularity(
+            value=0.8,
+            formula="A_shape / A_MBR per Rosin (2003), must be in [0,1]",
+        )
+        assert "Rosin" in r.formula
