@@ -1,13 +1,8 @@
 /**
- * 2D affine matrix utilities for bone transformations.
- *
- * All matrices are 3×2 stored as [a, b, tx, c, d, ty]:
- *   | a  b  tx |
- *   | c  d  ty |
- *   | 0  0  1  |
+ * 2D affine matrix + vector utilities.
  */
 
-import type { Mat3x2, Vec2 } from "./types.js";
+import type { Mat3x2, MutVec2, Vec2 } from "./types.js";
 
 export function matIdentity(): Mat3x2 {
   return [1, 0, 0, 0, 1, 0];
@@ -38,6 +33,22 @@ export function matRotAround(cx: number, cy: number, angle: number): Mat3x2 {
   return matMul(matTrans(cx, cy), matMul(matRot(angle), matTrans(-cx, -cy)));
 }
 
-export function matXform(m: Mat3x2, x: number, y: number): Vec2 {
+export function matXform(m: Mat3x2, x: number, y: number): MutVec2 {
   return [m[0] * x + m[1] * y + m[2], m[3] * x + m[4] * y + m[5]];
+}
+
+export function vec2Dist(a: Vec2, b: Vec2): number {
+  const dx = a[0] - b[0];
+  const dy = a[1] - b[1];
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+export function vec2Lerp(a: Vec2, b: Vec2, t: number): MutVec2 {
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+/** Smoothstep interpolation. */
+export function smoothstep(t: number): number {
+  const c = Math.max(0, Math.min(1, t));
+  return c * c * (3 - 2 * c);
 }

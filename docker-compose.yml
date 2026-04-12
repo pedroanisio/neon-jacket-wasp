@@ -1,0 +1,7 @@
+services:
+  silhouette-app:
+    build: frontend/silhouette-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data/output:/app/data:ro

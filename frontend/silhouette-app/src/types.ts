@@ -5,10 +5,27 @@
 // ── Geometry ──
 
 /** 2D point as [x, y]. */
-export type Vec2 = [number, number];
+export type Vec2 = readonly [number, number];
 
-/** 3x2 affine matrix stored as 6 floats: [a, b, tx, c, d, ty]. */
+/** Mutable 2D point. */
+export type MutVec2 = [number, number];
+
+/** 3x2 affine matrix: [a, b, tx, c, d, ty]. */
 export type Mat3x2 = [number, number, number, number, number, number];
+
+/** Triangle as 3 vertex indices. */
+export type Triangle = readonly [number, number, number];
+
+// ── Mesh ──
+
+export interface Mesh {
+  /** Vertex positions in rest pose (HU space). */
+  readonly vertices: ReadonlyArray<Vec2>;
+  /** Triangle indices into vertices. */
+  readonly triangles: ReadonlyArray<Triangle>;
+  /** Boundary vertex indices forming the outer contour (for outline rendering). */
+  readonly boundaryLoop: ReadonlyArray<number>;
+}
 
 // ── Bone system ──
 
@@ -16,24 +33,24 @@ export interface BoneDef {
   readonly name: string;
   readonly jx: number;
   readonly jy: number;
-  readonly parent: number; // -1 for root
+  readonly parent: number;
 }
 
 export interface BoneState extends BoneDef {
   angle: number;
-  wm: Mat3x2;  // world matrix
-  wj: Vec2;    // world joint position
+  wm: Mat3x2;
+  wj: MutVec2;
 }
 
-/** Bone weight: [boneIndex, weight]. */
-export type BoneWeight = [number, number];
+/** Per-vertex skinning: array of [boneIndex, weight] pairs. */
+export type SkinWeights = ReadonlyArray<readonly [number, number]>;
 
 // ── Animation ──
 
-export type BoneAngles = Record<string, number>;
+export type BoneAngles = Readonly<Record<string, number>>;
 export type PresetFn = (t: number) => BoneAngles;
 
-// ── Rendering ──
+// ── Display ──
 
 export interface DisplayToggles {
   fill: boolean;
@@ -44,48 +61,28 @@ export interface DisplayToggles {
   labels: boolean;
   com: boolean;
   grid: boolean;
+  mesh: boolean;
 }
 
 // ── Data loading ──
 
 export interface LandmarkDict {
-  [name: string]: Vec2;
+  readonly [name: string]: Vec2 | undefined;
 }
 
-export interface StrokeData {
-  readonly pts: ReadonlyArray<Vec2>;
-  readonly weights: ReadonlyArray<ReadonlyArray<BoneWeight>>;
+export interface SpanData {
+  readonly outer_dx: number;
+  readonly inner_dx: number;
 }
 
-/** V4 schema JSON shape (subset used by this app). */
-export interface V4Json {
-  readonly meta?: {
-    readonly mirror?: { readonly applied?: boolean };
-  };
-  readonly contour?: ReadonlyArray<[number, number]>;
-  readonly landmarks?: ReadonlyArray<{
-    readonly name: string;
-    readonly dx: number;
-    readonly dy: number;
-  }>;
-  readonly strokes?: ReadonlyArray<{
-    readonly points?: ReadonlyArray<[number, number]>;
-  }>;
-  readonly measurements?: {
-    readonly scanlines?: Record<string, unknown>;
-  };
+export interface StrokeInput {
+  readonly points: ReadonlyArray<Vec2>;
 }
 
-/** Compact JSON shape. */
-export interface CompactJson {
-  readonly c: number[];
-  readonly l: LandmarkDict;
-}
-
-export type InputJson = V4Json | CompactJson;
-
-/** Parsed contour + landmark data ready for the bone system. */
-export interface ParsedModel {
-  readonly contourFlat: number[];
+export interface SkinningData {
+  readonly mesh: Mesh;
+  readonly weights: ReadonlyArray<SkinWeights>;
+  readonly bones: BoneState[];
+  readonly boneIndex: Map<string, number>;
   readonly landmarks: LandmarkDict;
 }

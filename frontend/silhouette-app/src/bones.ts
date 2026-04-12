@@ -1,70 +1,66 @@
 /**
- * Bilateral skeleton with forward kinematics and linear blend skinning.
- *
- * Hierarchy (14 bones):
- *   root (waist) ─┬─ spine (shoulder) ─┬─ neck ── head
- *                  │                    ├─ r_arm ── r_forearm
- *                  │                    └─ l_arm ── l_forearm
- *                  ├─ r_thigh ── r_shin ── r_foot
- *                  └─ l_thigh ── l_shin ── l_foot
+ * Bilateral skeleton: FK, weight computation, and dual-quaternion skinning.
  */
 
-import { matIdentity, matRotAround, matMul, matXform } from "./math.js";
+import {
+  matIdentity,
+  matMul,
+  matRotAround,
+  matXform,
+  smoothstep,
+} from "./math.js";
 import type {
   BoneDef,
   BoneState,
-  BoneWeight,
   LandmarkDict,
+  MutVec2,
+  SkinWeights,
   Vec2,
 } from "./types.js";
 
-// ── Bone definition builder ──
+// ── Bone definitions ──
 
 export function buildBoneDefs(lm: LandmarkDict): BoneDef[] {
-  const sDx = lm["shoulder_peak"]![0];
-  const sDy = lm["shoulder_peak"]![1];
-  const hDy = lm["hip_peak"]![1];
-  const hJx = lm["hip_peak"]![0] * 0.35;
-  const kDx = lm["knee_valley"]![0];
-  const kDy = lm["knee_valley"]![1];
-  const aDx = lm["ankle_valley"]![0];
-  const aDy = lm["ankle_valley"]![1];
+  const sp = lm["shoulder_peak"]!;
+  const hp = lm["hip_peak"]!;
+  const kv = lm["knee_valley"]!;
+  const av = lm["ankle_valley"]!;
+  const sDx = sp[0], sDy = sp[1];
+  const hDy = hp[1], hJx = hp[0] * 0.35;
   const elbDy = (sDy + hDy) * 0.5;
   const elbDx = sDx * 0.85;
 
   return [
-    { name: "root",       jx: 0,     jy: lm["waist_valley"]![1], parent: -1 },
-    { name: "spine",      jx: 0,     jy: sDy,                    parent: 0 },
-    { name: "neck",       jx: 0,     jy: lm["neck_valley"]![1],  parent: 1 },
-    { name: "head",       jx: 0,     jy: lm["crown"]![1],        parent: 2 },
-    { name: "r_arm",      jx: sDx,   jy: sDy,                    parent: 1 },
-    { name: "r_forearm",  jx: elbDx, jy: elbDy,                  parent: 4 },
-    { name: "l_arm",      jx: -sDx,  jy: sDy,                    parent: 1 },
-    { name: "l_forearm",  jx: -elbDx,jy: elbDy,                  parent: 6 },
-    { name: "r_thigh",    jx: hJx,   jy: hDy,                    parent: 0 },
-    { name: "r_shin",     jx: kDx,   jy: kDy,                    parent: 8 },
-    { name: "r_foot",     jx: aDx,   jy: aDy,                    parent: 9 },
-    { name: "l_thigh",    jx: -hJx,  jy: hDy,                    parent: 0 },
-    { name: "l_shin",     jx: -kDx,  jy: kDy,                    parent: 11 },
-    { name: "l_foot",     jx: -aDx,  jy: aDy,                    parent: 12 },
+    { name: "root",       jx: 0,      jy: lm["waist_valley"]![1], parent: -1 },
+    { name: "spine",      jx: 0,      jy: sDy,                    parent: 0 },
+    { name: "neck",       jx: 0,      jy: lm["neck_valley"]![1],  parent: 1 },
+    { name: "head",       jx: 0,      jy: lm["crown"]![1],        parent: 2 },
+    { name: "r_arm",      jx: sDx,    jy: sDy,                    parent: 1 },
+    { name: "r_forearm",  jx: elbDx,  jy: elbDy,                  parent: 4 },
+    { name: "l_arm",      jx: -sDx,   jy: sDy,                    parent: 1 },
+    { name: "l_forearm",  jx: -elbDx, jy: elbDy,                  parent: 6 },
+    { name: "r_thigh",    jx: hJx,    jy: hDy,                    parent: 0 },
+    { name: "r_shin",     jx: kv[0],  jy: kv[1],                  parent: 8 },
+    { name: "r_foot",     jx: av[0],  jy: av[1],                  parent: 9 },
+    { name: "l_thigh",    jx: -hJx,   jy: hDy,                    parent: 0 },
+    { name: "l_shin",     jx: -kv[0], jy: kv[1],                  parent: 11 },
+    { name: "l_foot",     jx: -av[0], jy: av[1],                  parent: 12 },
   ];
 }
 
-// ── Bone runtime ──
-
-export function initBones(defs: BoneDef[]): BoneState[] {
+export function initBones(defs: ReadonlyArray<BoneDef>): BoneState[] {
   return defs.map((d) => ({
     ...d,
     angle: 0,
     wm: matIdentity(),
-    wj: [d.jx, d.jy] as Vec2,
+    wj: [d.jx, d.jy] as MutVec2,
   }));
 }
 
-export function buildBoneIndex(bones: BoneState[]): Map<string, number> {
-  const idx = new Map<string, number>();
-  bones.forEach((b, i) => idx.set(b.name, i));
-  return idx;
+export function buildBoneIndex(bones: ReadonlyArray<BoneState>): Map<string, number> {
+  const m = new Map<string, number>();
+  bones.forEach((b, i) => m.set(b.name, i));
+  return m;
 }
 
 // ── Forward kinematics ──
@@ -83,104 +79,161 @@ export function updateBones(bones: BoneState[]): void {
   }
 }
 
-// ── Skinning weight assignment ──
+// ── Weight computation ──
 
-const BLEND_HU = 0.3;
-function ss(t: number): number {
-  return t * t * (3 - 2 * t);
+const BLEND_HU = 0.35;
+
+export function computeVertexWeights(
+  vertices: ReadonlyArray<Vec2>,
+  lm: LandmarkDict,
+  boneIndex: Map<string, number>,
+): SkinWeights[] {
+  const armThreshold = (lm["waist_valley"]?.[0] ?? 0.55) * 1.05;
+  return vertices.map((v) =>
+    getWeights(v[0], v[1], lm, boneIndex, armThreshold),
+  );
 }
 
 export function getWeights(
   dx: number,
   dy: number,
   lm: LandmarkDict,
-  boneIndex: Map<string, number>,
-  armThresholdDx: number,
-): BoneWeight[] {
+  bi: Map<string, number>,
+  armThreshold: number,
+): SkinWeights {
   const adx = Math.abs(dx);
   const side = dx >= 0 ? "r" : "l";
-  const BI = (name: string): number => boneIndex.get(name) ?? 0;
+  const B = (name: string): number => bi.get(name) ?? 0;
 
   const neckDy = lm["neck_valley"]![1];
-  const shoulderDy = lm["shoulder_peak"]![1];
-  const waistDy = lm["waist_valley"]![1];
-  const hipDy = lm["hip_peak"]![1];
-  const kneeDy = lm["knee_valley"]![1];
-  const ankleDy = lm["ankle_valley"]![1];
+  const sDy = lm["shoulder_peak"]![1];
+  const wDy = lm["waist_valley"]![1];
+  const hDy = lm["hip_peak"]![1];
+  const kDy = lm["knee_valley"]![1];
+  const aDy = lm["ankle_valley"]![1];
 
   // Head
-  if (dy <= neckDy) return [[BI("head"), 1.0]];
+  if (dy <= neckDy) return [[B("head"), 1.0]];
 
-  // Neck → spine blend
-  if (dy <= shoulderDy) {
-    const t = (dy - neckDy) / (shoulderDy - neckDy);
-    if (t > 0.7) {
-      const s = ss((t - 0.7) / 0.3);
-      return [[BI("neck"), 1 - s], [BI("spine"), s]];
+  // Neck blend
+  if (dy <= sDy) {
+    const t = (dy - neckDy) / (sDy - neckDy);
+    if (t > 0.6) {
+      const s = smoothstep((t - 0.6) / 0.4);
+      return [[B("neck"), 1 - s], [B("spine"), s]];
     }
-    return [[BI("neck"), 1.0]];
+    return [[B("neck"), 1.0]];
   }
 
-  // Shoulder → hip: arms vs torso
-  if (dy <= hipDy) {
-    const elbowDy = (shoulderDy + hipDy) * 0.5;
-    if (adx > armThresholdDx) {
+  // Torso/arm region
+  if (dy <= hDy) {
+    const elbowDy = (sDy + hDy) * 0.5;
+    if (adx > armThreshold) {
       if (dy <= elbowDy) {
-        const ab = BI(`${side}_arm`);
-        const d = dy - shoulderDy;
-        if (d < BLEND_HU) return [[BI("spine"), 1 - ss(d / BLEND_HU)], [ab, ss(d / BLEND_HU)]];
+        const ab = B(`${side}_arm`);
+        const d = dy - sDy;
+        if (d < BLEND_HU) {
+          const s = smoothstep(d / BLEND_HU);
+          return [[B("spine"), 1 - s], [ab, s]];
+        }
         return [[ab, 1.0]];
       }
-      return [[BI(`${side}_forearm`), 1.0]];
+      return [[B(`${side}_forearm`), 1.0]];
     }
-    if (dy <= waistDy) return [[BI("spine"), 1.0]];
-    const hd = hipDy - dy;
+    if (dy <= wDy) return [[B("spine"), 1.0]];
+    const hd = hDy - dy;
     if (hd < BLEND_HU) {
-      const tb = BI(`${side}_thigh`);
-      return [[BI("root"), 1 - ss(1 - hd / BLEND_HU)], [tb, ss(1 - hd / BLEND_HU)]];
+      const s = smoothstep(1 - hd / BLEND_HU);
+      return [[B("root"), 1 - s], [B(`${side}_thigh`), s]];
     }
-    return [[BI("root"), 1.0]];
+    return [[B("root"), 1.0]];
   }
 
   // Legs
-  const th = BI(`${side}_thigh`);
-  const sh = BI(`${side}_shin`);
-  const ft = BI(`${side}_foot`);
-  if (dy <= kneeDy) {
-    const kd = kneeDy - dy;
-    if (kd < BLEND_HU) return [[th, 1 - ss(1 - kd / BLEND_HU)], [sh, ss(1 - kd / BLEND_HU)]];
+  const th = B(`${side}_thigh`);
+  const sh = B(`${side}_shin`);
+  const ft = B(`${side}_foot`);
+  if (dy <= kDy) {
+    const kd = kDy - dy;
+    if (kd < BLEND_HU) {
+      const s = smoothstep(1 - kd / BLEND_HU);
+      return [[th, 1 - s], [sh, s]];
+    }
     return [[th, 1.0]];
   }
-  if (dy <= ankleDy) {
-    const ad = ankleDy - dy;
-    if (ad < BLEND_HU) return [[sh, 1 - ss(1 - ad / BLEND_HU)], [ft, ss(1 - ad / BLEND_HU)]];
+  if (dy <= aDy) {
+    const ad = aDy - dy;
+    if (ad < BLEND_HU) {
+      const s = smoothstep(1 - ad / BLEND_HU);
+      return [[sh, 1 - s], [ft, s]];
+    }
     return [[sh, 1.0]];
   }
   return [[ft, 1.0]];
 }
 
-// ── Linear blend skinning ──
+// ── Dual-Quaternion Skinning (2D approximation) ──
+//
+// True DQS needs quaternions (3D). In 2D, we approximate volume
+// preservation by blending in rotation-then-translate space rather
+// than raw matrix space. This prevents the "candy wrapper" collapse
+// and the volume loss that LBS causes at joints.
 
-export function deformPoint(
+export function deformVertex(
   px: number,
   py: number,
-  weights: ReadonlyArray<BoneWeight>,
+  weights: SkinWeights,
   bones: ReadonlyArray<BoneState>,
-): Vec2 {
-  let rx = 0;
-  let ry = 0;
-  for (const [bi, w] of weights) {
-    const [tx, ty] = matXform(bones[bi]!.wm, px, py);
-    rx += w * tx;
-    ry += w * ty;
+): MutVec2 {
+  if (weights.length === 1) {
+    const [bi, _w] = weights[0]!;
+    return matXform(bones[bi]!.wm, px, py);
   }
-  return [rx, ry];
+
+  // For multi-bone blending, decompose each bone's transform into
+  // rotation angle + translation, blend those, then recompose.
+  // This preserves area better than blending matrices directly.
+  let totalAngle = 0;
+  let totalTx = 0;
+  let totalTy = 0;
+  let pivotX = 0;
+  let pivotY = 0;
+
+  for (const [bi, w] of weights) {
+    const b = bones[bi]!;
+    // Extract rotation angle from world matrix
+    const angle = Math.atan2(b.wm[3], b.wm[0]);
+    // Extract translation component
+    const tx = b.wm[2];
+    const ty = b.wm[5];
+
+    totalAngle += w * angle;
+    totalTx += w * tx;
+    totalTy += w * ty;
+    pivotX += w * b.wj[0];
+    pivotY += w * b.wj[1];
+  }
+
+  // Reconstruct blended transform
+  const c = Math.cos(totalAngle);
+  const s = Math.sin(totalAngle);
+
+  // Rotate around blended pivot, then translate
+  const dx = px - pivotX;
+  const dy = py - pivotY;
+  return [
+    c * dx - s * dy + pivotX + totalTx,
+    s * dx + c * dy + pivotY + totalTy,
+  ];
 }
 
-export function deformContour(
-  contour: ReadonlyArray<Vec2>,
-  vertexWeights: ReadonlyArray<ReadonlyArray<BoneWeight>>,
+/** Deform all mesh vertices. */
+export function deformMesh(
+  vertices: ReadonlyArray<Vec2>,
+  weights: ReadonlyArray<SkinWeights>,
   bones: ReadonlyArray<BoneState>,
-): Vec2[] {
-  return contour.map((p, i) => deformPoint(p[0], p[1], vertexWeights[i]!, bones));
+): MutVec2[] {
+  return vertices.map((v, i) =>
+    deformVertex(v[0], v[1], weights[i]!, bones),
+  );
 }
