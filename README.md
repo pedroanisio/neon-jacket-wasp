@@ -1,5 +1,7 @@
 # Neon Jacket Wasp
 
+![Neon Jacket Wasp](docs/repo/Neon-Jacket-Wasp.jpeg)
+
 Silhouette analysis SDK: v4 JSON schema, Pydantic models, fluent builder, and v2-to-v4 enrichment pipeline.
 
 ## Architecture
