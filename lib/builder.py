@@ -137,31 +137,18 @@ _COVERED_CLASSES: dict[LLMErrorClass, str] = {
         "SilhouetteBuilder.missing_sections() guards completeness"
     ),
     LLMErrorClass.ERR_TRUNCATION: (
-        "min_length constraints on contour (≥3), midline (≥2), "
-        "landmarks (≥1), strokes points (≥2)"
+        "min_length constraints on contour (≥3), midline (≥2), landmarks (≥1), strokes points (≥2)"
     ),
 }
 
 # Error classes NOT covered — known, accepted risks per §9.1.
 _UNCOVERED_CLASSES: dict[LLMErrorClass, str] = {
-    LLMErrorClass.ERR_HALLUCINATION: (
-        "No factual ground truth available at schema level"
-    ),
-    LLMErrorClass.ERR_SYCOPHANCY: (
-        "Not applicable to structured data ingestion"
-    ),
-    LLMErrorClass.ERR_INSTRUCTION: (
-        "Upstream concern; SDK validates output, not prompt adherence"
-    ),
-    LLMErrorClass.ERR_CALIBRATION: (
-        "No confidence calibration verification at schema level"
-    ),
-    LLMErrorClass.ERR_SEMANTIC: (
-        "Structural validation only; semantic plausibility unchecked"
-    ),
-    LLMErrorClass.ERR_REASONING: (
-        "No cross-field logical consistency verification"
-    ),
+    LLMErrorClass.ERR_HALLUCINATION: ("No factual ground truth available at schema level"),
+    LLMErrorClass.ERR_SYCOPHANCY: ("Not applicable to structured data ingestion"),
+    LLMErrorClass.ERR_INSTRUCTION: ("Upstream concern; SDK validates output, not prompt adherence"),
+    LLMErrorClass.ERR_CALIBRATION: ("No confidence calibration verification at schema level"),
+    LLMErrorClass.ERR_SEMANTIC: ("Structural validation only; semantic plausibility unchecked"),
+    LLMErrorClass.ERR_REASONING: ("No cross-field logical consistency verification"),
 }
 
 
@@ -689,9 +676,7 @@ class SilhouetteDocument:
     # ── Deserialization ──
 
     @classmethod
-    def from_json(
-        cls, path: str | Path, *, strict: bool = True
-    ) -> SilhouetteDocument:
+    def from_json(cls, path: str | Path, *, strict: bool = True) -> SilhouetteDocument:
         """Load and validate a JSON file.
 
         Parameters
@@ -714,9 +699,7 @@ class SilhouetteDocument:
         return cls.from_dict(data, strict=strict)
 
     @classmethod
-    def from_dict(
-        cls, data: dict[str, Any], *, strict: bool = True
-    ) -> SilhouetteDocument:
+    def from_dict(cls, data: dict[str, Any], *, strict: bool = True) -> SilhouetteDocument:
         """Create from a plain dict.
 
         See ``from_json`` for the meaning of *strict*.

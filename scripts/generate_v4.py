@@ -1142,9 +1142,19 @@ def phase_20_hu_moments(data, sym_all):
     print(f"  Hu moments (log): {hu_log}")
 
 
-def phase_21_turning_function(data, right_pts):
-    """Cumulative tangent angle θ(s) parameterised by normalised arc-length."""
-    diffs = np.diff(right_pts, axis=0)
+def phase_21_turning_function(data, contour_pts):
+    """Cumulative tangent angle θ(s) parameterised by normalised arc-length.
+
+    Operates on the full closed contour so that winding_number ≈ ±1
+    (Hopf Umlaufsatz).
+    """
+    # Close the contour if not already closed
+    if np.linalg.norm(contour_pts[0] - contour_pts[-1]) > 1e-8:
+        pts = np.vstack([contour_pts, contour_pts[0:1]])
+    else:
+        pts = contour_pts
+
+    diffs = np.diff(pts, axis=0)
     seg_lengths = np.sqrt((diffs**2).sum(axis=1))
     T = seg_lengths.sum()
     if T < 1e-10:
@@ -1160,10 +1170,11 @@ def phase_21_turning_function(data, right_pts):
 
     data["turning_function"] = {
         "note": (
-            "Turning function θ(s): cumulative tangent angle of the right-side contour "
+            "Turning function θ(s): cumulative tangent angle of the full closed contour "
             "as a function of normalised arc-length s ∈ [0,1]."
         ),
         "reference": "Arkin, E. et al. IEEE TPAMI 13(3):209–216, 1991.",
+        "computed_on": "mirrored_full",
         "perimeter_hu": round(float(T), 4),
         "total_angle_rad": round(total_angle, 4),
         "total_angle_deg": round(float(np.degrees(total_angle)), 2),
@@ -1223,9 +1234,10 @@ def phase_22_convex_hull(data, sym_all, right_pts, right_dx, right_dy, env_dx, e
     data["convex_hull"] = {
         "note": (
             "Convex hull of the full bilateral silhouette. "
-            "Solidity = silhouette_area / hull_area."
+            "Solidity = silhouette_area / hull_area (area-ratio convexity)."
         ),
-        "reference": "Zunic, J. & Rosin, P. IEEE TPAMI 26(7):923–934, 2004.",
+        "reference": "Gonzalez, R.C. & Woods, R.E. 'Digital Image Processing.' 3rd ed., Prentice Hall, 2008. §11.3.",
+        "solidity_formula": "A_shape / A_hull",
         "hull_area_hu2": round(hull_area, 4),
         "hull_perimeter_hu": round(hull_perim, 4),
         "silhouette_area_hu2": round(sil_area, 4),
@@ -1462,8 +1474,12 @@ def phase_27_biomechanics(data, fig_height, crown_dy):
     lm_map = {l["name"]: l for l in data["landmarks"]}
     scale_cm = 170.0 / fig_height
 
+    # CoM fractions re-derived for crown→neck_valley endpoints per
+    # de Leva (1996) Table 4 and Plagenhoef et al. (1983).
+    # head_neck com_proximal_fraction ≈ 0.50 (crown→neck_valley),
+    # NOT Winter's 1.0 which assumes C7-T1→ear-canal endpoints.
     WINTER = {
-        "head_neck":  {"mf": 0.0681, "com": 1.000,  "rc": 0.495, "rp": 0.495, "prox": "crown",       "dist": "neck_valley",  "note": "Head+neck as single segment."},
+        "head_neck":  {"mf": 0.0681, "com": 0.5002, "rc": 0.495, "rp": 0.495, "prox": "crown",       "dist": "neck_valley",  "note": "Head+neck. CoM re-derived for crown→neck_valley endpoints (de Leva 1996)."},
         "trunk":      {"mf": 0.4270, "com": 0.3782, "rc": 0.3076,"rp": 0.4890,"prox": "shoulder_peak","dist": "hip_peak",     "note": "Full trunk."},
         "upper_arm":  {"mf": 0.0255, "com": 0.5754, "rc": 0.2610,"rp": 0.2780,"note": "Not measurable from frontal silhouette."},
         "forearm":    {"mf": 0.0138, "com": 0.4559, "rc": 0.2610,"rp": 0.2780,"note": "Not measurable from frontal silhouette."},
@@ -1478,6 +1494,10 @@ def phase_27_biomechanics(data, fig_height, crown_dy):
         entry = {"segment": name, "mass_fraction": p["mf"],
                  "com_proximal_fraction": p["com"], "rog_com_fraction": p["rc"],
                  "rog_proximal_fraction": p["rp"]}
+        if "prox" in p:
+            entry["proximal_landmark"] = p["prox"]
+        if "dist" in p:
+            entry["distal_landmark"] = p["dist"]
         if "prox" in p and "dist" in p and p["prox"] in lm_map and p["dist"] in lm_map:
             pdy, ddy = lm_map[p["prox"]]["dy"], lm_map[p["dist"]]["dy"]
             sl = abs(ddy - pdy)
@@ -1503,12 +1523,17 @@ def phase_27_biomechanics(data, fig_height, crown_dy):
     body_com = total_com / total_mf if total_mf > 0 else fig_height * 0.55
 
     data["biomechanics"] = {
-        "note": "Biomechanical segment parameters from Winter (2009) cadaver study data (female).",
+        "note": "Biomechanical segment parameters. Female BSP from de Leva (1996), mass fractions from Winter (2009).",
         "reference": [
+            "de Leva, P. 'Adjustments to Zatsiorsky-Seluyanov's segment inertia parameters.' J. Biomech. 29(9):1223–1230, 1996.",
             "Winter, D.A. 'Biomechanics and Motor Control of Human Movement.' 4th ed., Wiley, 2009. Table 4.1.",
             "Dempster, W.T. 'Space requirements of the seated operator.' WADC-TR-55-159, 1955.",
         ],
         "gender_data": "female",
+        "endpoint_convention": {
+            "source": "schema_landmarks",
+            "note": "Segment endpoints use schema landmark names (crown, neck_valley, etc.), not Winter's anatomical landmarks (C7-T1, ear canal, etc.). CoM fractions re-derived accordingly.",
+        },
         "canonical_height_cm": 170.0,
         "scale_cm_per_hu": round(scale_cm, 4),
         "whole_body_com": {
@@ -1590,14 +1615,15 @@ def phase_29_shape_complexity(data, right_pts, sym_all, env_dx, env_dy):
         yb = np.floor((right_pts[:, 1] - right_pts[:, 1].min()) / eps).astype(int)
         counts.append(len(set(zip(xb, yb))))
     fractal_dim = float(np.polyfit(np.log(1.0 / epsilons), np.log(np.array(counts, dtype=float)), 1)[0])
+    fractal_dim = float(np.clip(fractal_dim, 1.0, 2.0))
 
     sil_area = float(_trapz(2 * env_dx, env_dy))
-    perim = data.get("fourier_descriptors", {}).get("perimeter_hu", 0)
-    bilateral_perim = 2 * perim if perim > 0 else 1
-    compactness = 4 * np.pi * sil_area / (bilateral_perim**2) if perim > 0 else 0
+    total_perim = data["meta"]["contour_quality"]["total_perimeter_hu"]
+    compactness = 4 * np.pi * sil_area / (total_perim**2) if total_perim > 0 else 0
 
     bbox = data["meta"]["bounding_box_hu"]
-    rectangularity = sil_area / (bbox["width"] * bbox["height"]) if bbox["width"] * bbox["height"] > 0 else 0
+    bbox_area = bbox["width"] * bbox["height"]
+    rectangularity = min(sil_area / bbox_area, 1.0) if bbox_area > 0 else 0
 
     cov = np.cov(sym_all.T)
     eigs = sorted(np.linalg.eigvalsh(cov))
@@ -1614,7 +1640,10 @@ def phase_29_shape_complexity(data, right_pts, sym_all, env_dx, env_dy):
         "fractal_dimension": {"value": round(fractal_dim, 4), "method": "box_counting", "n_scales": 10,
                               "note": "1.0 = smooth curve, 1.2+ = significant fine structure."},
         "compactness": {"value": round(float(compactness), 4), "formula": "4π·A / P²",
-                        "note": "Isoperimetric ratio. Circle=1.0."},
+                        "perimeter_used": "original",
+                        "computed_area_hu2": round(sil_area, 4),
+                        "computed_perimeter_hu": round(total_perim, 4),
+                        "note": "Isoperimetric ratio. Circle=1.0. Uses total_perimeter_hu from contour_quality."},
         "rectangularity": {"value": round(float(rectangularity), 4), "formula": "A / A_bbox",
                            "note": "How well the figure fills its bounding box."},
         "eccentricity": {"value": round(float(eccentricity), 4),
@@ -1694,7 +1723,7 @@ def main():
     # ── Phase 20–29: v3.1 → v4 (from cross_domain_enrich.py) ──
     print("\n── v3.1 → v4: Cross-domain ──")
     phase_20_hu_moments(data, sym_all)
-    phase_21_turning_function(data, right_pts)
+    phase_21_turning_function(data, contour)
     phase_22_convex_hull(data, sym_all, right_pts, right_dx, right_dy, env_dx, env_dy)
     phase_23_gesture_line(data, crown_dy, fig_height)
     phase_24_curvature_scale_space(data, right_pts, right_dx, right_dy)

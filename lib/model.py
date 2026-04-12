@@ -111,6 +111,7 @@ class VerificationReport(BaseModel):
         """True if covered classes found no violations."""
         return len(self.schema_errors) == 0
 
+
 # ═══════════════════════════════════════════════════════════════
 # Type aliases  ($defs in JSON Schema)
 # ═══════════════════════════════════════════════════════════════
@@ -118,6 +119,7 @@ class VerificationReport(BaseModel):
 Point2d = tuple[float, float]
 UnitVector2d = tuple[float, float]
 DyRange = tuple[float, float]
+ContourVariant = Literal["right_half", "mirrored_full", "original"]
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -807,6 +809,7 @@ class TurningFunction(_Strict):
     samples: list[TurningSample]
     note: str | None = None
     reference: str | None = None
+    computed_on: ContourVariant | None = None
     perimeter_hu: float | None = Field(None, ge=0)
     total_angle_deg: float | None = None
     max_turning_rate: MaxTurningRate | None = None
@@ -844,6 +847,7 @@ class ConvexHull(_Strict):
     convexity_deficiency: float = Field(ge=0, le=1)
     note: str | None = None
     reference: str | None = None
+    solidity_formula: str | None = None
     hull_perimeter_hu: float | None = Field(None, ge=0)
     negative_space_area_hu2: float | None = Field(None, ge=0)
     hull_vertex_count: int | None = Field(None, ge=3)
@@ -1019,12 +1023,19 @@ class WholeBodyCom(_Strict):
     note: str | None = None
 
 
+class SegmentEndpointConvention(_Strict):
+    source: str
+    note: str | None = None
+
+
 class BioSegment(_Strict):
     segment: str
     mass_fraction: float = Field(ge=0, le=1)
     com_proximal_fraction: float = Field(ge=0, le=1)
     rog_com_fraction: float = Field(ge=0)
     rog_proximal_fraction: float = Field(ge=0)
+    proximal_landmark: str | None = None
+    distal_landmark: str | None = None
     segment_length_hu: float | None = Field(None, ge=0)
     segment_length_cm: float | None = Field(None, ge=0)
     com_position: ComPosition | None = None
@@ -1038,6 +1049,7 @@ class Biomechanics(_Strict):
     segments: list[BioSegment] = Field(min_length=1)
     note: str | None = None
     reference: str | list[str] | None = None
+    endpoint_convention: SegmentEndpointConvention | None = None
     canonical_height_cm: float | None = Field(None, gt=0)
     scale_cm_per_hu: float | None = Field(None, gt=0)
     whole_body_com: WholeBodyCom | None = None
@@ -1098,7 +1110,7 @@ class CurvatureEntropy(_Strict):
 
 
 class FractalDimension(_Strict):
-    value: float = Field(ge=0)
+    value: float = Field(ge=1, le=2)
     method: str
     n_scales: int | None = Field(None, ge=1)
     note: str | None = None
@@ -1107,6 +1119,9 @@ class FractalDimension(_Strict):
 class Compactness(_Strict):
     value: float = Field(ge=0, le=1)
     formula: str | None = None
+    perimeter_used: ContourVariant | None = None
+    computed_area_hu2: float | None = Field(None, ge=0)
+    computed_perimeter_hu: float | None = Field(None, ge=0)
     note: str | None = None
 
 
