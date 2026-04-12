@@ -716,20 +716,21 @@ function loadJsonData(json) {
     const scanlines = json.measurements.scanlines;
     const multiSpanLevels = [];
     for (const [dk, entry] of Object.entries(scanlines)) {
+      let spans = null;
       if (entry && typeof entry === 'object' && !Array.isArray(entry) && entry.topology_detail) {
-        const spans = entry.topology_detail;
-        if (Array.isArray(spans) && spans.length >= 2) {
-          multiSpanLevels.push({
-            dy: parseFloat(dk),
-            gapLeft: spans[spans.length - 1].outer_dx,
-            gapRight: spans[0].inner_dx,
-          });
-        }
+        spans = entry.topology_detail;
       } else if (Array.isArray(entry) && entry.length >= 2) {
+        spans = entry;
+      }
+      // Only use levels with exactly 2 spans (one right leg, one left leg)
+      // where the right span is on the positive side and left span is on
+      // the negative side — this filters out arm/torso complexity.
+      if (spans && spans.length === 2 &&
+          spans[0].inner_dx > 0 && spans[1].outer_dx < 0) {
         multiSpanLevels.push({
           dy: parseFloat(dk),
-          gapLeft: entry[entry.length - 1].outer_dx,
-          gapRight: entry[0].inner_dx,
+          gapLeft: spans[1].outer_dx,
+          gapRight: spans[0].inner_dx,
         });
       }
     }
