@@ -83,43 +83,61 @@ function initFromData(data: LoadedData): void {
     data.crotchDy ?? undefined,
   );
 
-  // Build bone system
-  const defs = buildBoneDefs(data.landmarks);
+  // Build bone system — pass width profile and figure height for
+  // adaptive placement on armored/clothed figures.
+  const defs = buildBoneDefs(data.landmarks, data.widthProfile, data.figureHeight);
   bones = initBones(defs);
   boneIndex = buildBoneIndex(bones);
 
-  // Compute per-vertex skin weights
+  // Compute per-vertex skin weights — pass body regions and width
+  // profile for region-aware blending.
   vertexWeights = computeVertexWeights(
     mesh.vertices,
     data.landmarks,
     boneIndex,
+    data.widthProfile,
+    data.bodyRegions,
+    data.figureHeight,
   );
 
   // Compute stroke weights
   strokeData = [];
   strokeWeights = [];
-  const armThreshold = (data.landmarks["waist_valley"]?.[0] ?? 0.55) * 1.05;
+  const bh = data.figureHeight * 0.044;
+  const emptyRegions = new Map<string, [number, number]>();
+  for (const r of data.bodyRegions) {
+    emptyRegions.set(r.name, [r.dyStart, r.dyEnd]);
+  }
+  // Arm threshold from width profile or landmark
+  let armThreshold = (data.landmarks["waist_valley"]?.[0] ?? 0.55) * 1.05;
+  if (data.widthProfile.length > 0) {
+    const wDy = data.landmarks["waist_valley"]?.[1] ?? 2.8;
+    for (const s of data.widthProfile) {
+      if (Math.abs(s.dy - wDy) <= 0.2 && s.dx * 0.95 > armThreshold) {
+        armThreshold = s.dx * 0.95;
+      }
+    }
+  }
   for (const s of data.strokes) {
-    // Right-side stroke
     const wts = s.points.map((p: Vec2) =>
-      getWeights(p[0], p[1], data.landmarks, boneIndex, armThreshold),
+      getWeights(p[0], p[1], data.landmarks, boneIndex, armThreshold, bh, emptyRegions),
     );
     strokeData.push(s);
     strokeWeights.push(wts);
 
-    // Mirror stroke if needed
     if (data.mirrored) {
       const mirPts: Vec2[] = s.points.map((p: Vec2) => [-p[0], p[1]] as const);
       const mirWts = mirPts.map((mp: Vec2) =>
-        getWeights(mp[0], mp[1], data.landmarks, boneIndex, armThreshold),
+        getWeights(mp[0], mp[1], data.landmarks, boneIndex, armThreshold, bh, emptyRegions),
       );
       strokeData.push({ points: mirPts });
       strokeWeights.push(mirWts);
     }
   }
 
-  // CoM weights
-  comWeights = getWeights(0, 3.72, data.landmarks, boneIndex, armThreshold);
+  // CoM weights — use biomechanics whole_body_com dy if available
+  const comDy = data.figureHeight * 0.465;
+  comWeights = getWeights(0, comDy, data.landmarks, boneIndex, armThreshold, bh, emptyRegions);
 
   // Reset animation
   manualOverrides = {};

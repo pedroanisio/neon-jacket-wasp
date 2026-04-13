@@ -1,8 +1,8 @@
-*.pyc
 .coverage
-.venv
-lineage
-.refactor-backup
-node_modules/
 .env
+.refactor-backup
+.venv
+*.pyc
 dist/
+lineage
+node_modules/
