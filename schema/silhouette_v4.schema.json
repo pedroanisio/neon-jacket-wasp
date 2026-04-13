@@ -1368,6 +1368,20 @@
           "default": null,
           "title": "Solidity Formula"
         },
+        "boundary_convexity": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Boundary Convexity"
+        },
         "hull_perimeter_hu": {
           "anyOf": [
             {
@@ -1918,6 +1932,23 @@
           "default": null,
           "title": "Computed On"
         },
+        "seam_handling": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "blended",
+                "windowed"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seam Handling"
+        },
         "persistent_features": {
           "anyOf": [
             {
@@ -2412,96 +2443,46 @@
       "title": "GenderSignals",
       "type": "object"
     },
-    "GestureLine": {
+    "GestureLineSpline": {
       "additionalProperties": false,
+      "description": "True gesture / line-of-action from the medial axis.",
       "properties": {
-        "primary_axis": {
-          "$ref": "#/$defs/PrimaryAxis"
-        },
-        "secondary_axis": {
-          "$ref": "#/$defs/SecondaryAxis"
-        },
-        "lean_angle_deg": {
-          "title": "Lean Angle Deg",
-          "type": "number"
-        },
-        "gesture_energy": {
-          "minimum": 0,
-          "title": "Gesture Energy",
-          "type": "number"
-        },
-        "note": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+        "method": {
+          "enum": [
+            "medial_axis_spline",
+            "joint_chain_spline",
+            "manual"
           ],
-          "default": null,
-          "title": "Note"
+          "title": "Method",
+          "type": "string"
         },
-        "reference": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "items": {
-                "type": "string"
+        "control_points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
               },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Reference"
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 2,
+          "title": "Control Points",
+          "type": "array"
         },
-        "centroid": {
+        "curvature_class": {
           "anyOf": [
             {
-              "$ref": "#/$defs/DxDy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "cubic_fit_coefficients": {
-          "anyOf": [
-            {
-              "maxItems": 4,
-              "minItems": 4,
-              "prefixItems": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "number"
-                }
+              "enum": [
+                "C_curve",
+                "S_curve",
+                "straight",
+                "complex"
               ],
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Cubic Fit Coefficients"
-        },
-        "lean_interpretation": {
-          "anyOf": [
-            {
               "type": "string"
             },
             {
@@ -2509,7 +2490,7 @@
             }
           ],
           "default": null,
-          "title": "Lean Interpretation"
+          "title": "Curvature Class"
         },
         "max_lateral_deviation_hu": {
           "anyOf": [
@@ -2524,20 +2505,7 @@
           "default": null,
           "title": "Max Lateral Deviation Hu"
         },
-        "contrapposto_score": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Contrapposto Score"
-        },
-        "contrapposto_interpretation": {
+        "note": {
           "anyOf": [
             {
               "type": "string"
@@ -2547,31 +2515,14 @@
             }
           ],
           "default": null,
-          "title": "Contrapposto Interpretation"
-        },
-        "landmark_deviations": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/$defs/LandmarkDeviation"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Landmark Deviations"
+          "title": "Note"
         }
       },
       "required": [
-        "primary_axis",
-        "secondary_axis",
-        "lean_angle_deg",
-        "gesture_energy"
+        "method",
+        "control_points"
       ],
-      "title": "GestureLine",
+      "title": "GestureLineSpline",
       "type": "object"
     },
     "HairSymmetry": {
@@ -3318,6 +3269,18 @@
           "default": null,
           "title": "Shape Prior"
         },
+        "binary_payload": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Binary Payload"
+        },
         "multi_figure_sheet": {
           "anyOf": [
             {
@@ -3421,6 +3384,25 @@
         "semantics"
       ],
       "title": "Mirror",
+      "type": "object"
+    },
+    "MultiSpanEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "outer_dx": {
+          "title": "Outer Dx",
+          "type": "number"
+        },
+        "inner_dx": {
+          "title": "Inner Dx",
+          "type": "number"
+        }
+      },
+      "required": [
+        "outer_dx",
+        "inner_dx"
+      ],
+      "title": "MultiSpanEntry",
       "type": "object"
     },
     "NormalSample": {
@@ -3654,6 +3636,169 @@
         "explained_variance_ratio"
       ],
       "title": "PrimaryAxis",
+      "type": "object"
+    },
+    "PrincipalAxes": {
+      "additionalProperties": false,
+      "description": "PCA on contour/landmark point cloud — captures tilt and elongation.\n\nRenamed from ``GestureLine`` per P3-12: PCA produces a straight axis,\nnot the curved 'line of action' that Loomis described.",
+      "properties": {
+        "primary_axis": {
+          "$ref": "#/$defs/PrimaryAxis"
+        },
+        "secondary_axis": {
+          "$ref": "#/$defs/SecondaryAxis"
+        },
+        "lean_angle_deg": {
+          "title": "Lean Angle Deg",
+          "type": "number"
+        },
+        "gesture_energy": {
+          "minimum": 0,
+          "title": "Gesture Energy",
+          "type": "number"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference"
+        },
+        "centroid": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DxDy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cubic_fit_coefficients": {
+          "anyOf": [
+            {
+              "maxItems": 4,
+              "minItems": 4,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cubic Fit Coefficients"
+        },
+        "lean_interpretation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lean Interpretation"
+        },
+        "max_lateral_deviation_hu": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Lateral Deviation Hu"
+        },
+        "contrapposto_score": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contrapposto Score"
+        },
+        "contrapposto_interpretation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contrapposto Interpretation"
+        },
+        "landmark_deviations": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/LandmarkDeviation"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Landmark Deviations"
+        }
+      },
+      "required": [
+        "primary_axis",
+        "secondary_axis",
+        "lean_angle_deg",
+        "gesture_energy"
+      ],
+      "title": "PrincipalAxes",
       "type": "object"
     },
     "Proportion": {
@@ -4095,6 +4240,46 @@
           ],
           "default": null,
           "title": "Curvature"
+        },
+        "contour_pairs": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contour Pairs"
+        },
+        "topology_detail": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/MultiSpanEntry"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Topology Detail"
+        },
+        "topology": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Topology"
         }
       },
       "required": [
@@ -5981,7 +6166,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "Complete v4 silhouette analysis document (27 required sections).",
+  "description": "Complete v4 silhouette analysis document.",
   "properties": {
     "meta": {
       "$ref": "#/$defs/Meta"
@@ -6090,7 +6275,7 @@
       "$ref": "#/$defs/ConvexHull"
     },
     "gesture_line": {
-      "$ref": "#/$defs/GestureLine"
+      "$ref": "#/$defs/PrincipalAxes"
     },
     "curvature_scale_space": {
       "$ref": "#/$defs/CurvatureScaleSpace"
@@ -6109,6 +6294,17 @@
     },
     "shape_complexity": {
       "$ref": "#/$defs/ShapeComplexity"
+    },
+    "gesture_line_spline": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GestureLineSpline"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
