@@ -26,17 +26,12 @@ from pathlib import Path
 from typing import Any
 
 from lib.builder import SilhouetteDocument
+from lib.constants import RIGHT_END as _RIGHT_END
 
 __all__ = ["parse_v2_json", "parse_zip"]
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 _GENERATE_SCRIPT = _REPO_ROOT / "scripts" / "generate_v4.py"
-
-# ──────────────────────────────────────────────────────────
-# Right-side contour boundary (matches generate_v4.py)
-# ──────────────────────────────────────────────────────────
-
-_RIGHT_END = 727
 
 # ──────────────────────────────────────────────────────────
 # Landmark descriptions for v2 → v4 upgrade

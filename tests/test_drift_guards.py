@@ -2,9 +2,10 @@
 
 These tests guard against silent desynchronisation between the source-of-truth
 (lib/model.py) and its unguarded dependents: the frontend JSX renderers, the
-hardcoded demo data snapshot, and the formal specification document.
+hardcoded demo data snapshot, the formal specification document, the README,
+the test fixtures, and the shared RIGHT_END constant.
 
-Each test corresponds to a CRITICAL finding from the drift-risk map.
+Each test corresponds to a CRITICAL or HIGH finding from the drift-risk map.
 """
 
 from __future__ import annotations
@@ -545,4 +546,347 @@ def test_schema_file_matches_model() -> None:
     assert on_disk == generated, (
         "schema/silhouette_v4.schema.json is out of date with lib/model.py. "
         "Run `make schema` to regenerate."
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# HIGH #4 — silhouette_render.jsx and stick_to_mesh_pipeline.jsx
+#
+# These renderers embed hardcoded DATA objects whose field structure must
+# stay aligned with the schema.  The abbreviated keys map back to v4
+# schema sections, similar to the CRITICAL #2 snapshot tests.
+# ═════════════════════════════════════════════════════════════════════════
+
+# silhouette_render.jsx DATA keys and their schema mappings.
+# DATA has: c (contour), s (strokes), l (landmarks), p (proportions), m (meta classification).
+_RENDER_ABBREVIATED_TO_SCHEMA: dict[str, str] = {
+    "c": "contour",
+    "s": "strokes",
+    "l": "landmarks",
+    "p": "proportion",
+}
+
+# Within DATA.l[*], abbreviated keys map to Landmark schema fields.
+_RENDER_LANDMARK_ABBREV: dict[str, str] = {
+    "n": "name",
+    "d": "description",
+    "dy": "dy",
+    "dx": "dx",
+}
+
+# Within DATA.s[*], abbreviated keys map to Stroke schema fields.
+_RENDER_STROKE_ABBREV: dict[str, str] = {
+    "r": "region",
+    "p": "points",
+}
+
+# Within DATA.p, abbreviated keys map to Proportion schema fields.
+_RENDER_PROPORTION_ABBREV: dict[str, str] = {
+    "hc": "head_count_total",
+    "sr": "segment_ratios",
+    "wr": "width_ratios",
+}
+
+
+def _extract_render_data() -> dict:
+    """Parse the ``const DATA = {...};`` JSON from silhouette_render.jsx."""
+    source = RENDER_JSX.read_text(encoding="utf-8")
+    match = re.search(r"const\s+DATA\s*=\s*(\{.+?\});", source, re.DOTALL)
+    assert match, "const DATA = {...}; not found in silhouette_render.jsx"
+    raw = match.group(1)
+    raw = re.sub(r"(?<![0-9])\.(\d)", r"0.\1", raw)
+    return json.loads(raw)
+
+
+def test_render_data_section_keys_map_to_schema() -> None:
+    """silhouette_render.jsx DATA keys must map to valid schema sections."""
+    schema = _load_schema()
+    schema_sections = set(schema.get("properties", {}).keys())
+    for abbrev, section in _RENDER_ABBREVIATED_TO_SCHEMA.items():
+        assert section in schema_sections, (
+            f"Render DATA key '{abbrev}' maps to '{section}' which is "
+            f"not in the JSON schema."
+        )
+
+
+def test_render_data_landmark_fields_match_schema() -> None:
+    """Landmark entries in silhouette_render.jsx DATA.l must use valid fields."""
+    schema = _load_schema()
+    landmark_ref = schema["properties"]["landmarks"]["items"]
+    landmark_schema = _resolve_ref(schema, landmark_ref["$ref"])
+    schema_fields = set(landmark_schema["properties"].keys())
+
+    d = _extract_render_data()
+    sample = d["l"][0]
+    for abbrev_key in sample:
+        full_key = _RENDER_LANDMARK_ABBREV.get(abbrev_key, abbrev_key)
+        assert full_key in schema_fields, (
+            f"Render landmark key '{abbrev_key}' (→ '{full_key}') "
+            f"not in Landmark schema: {schema_fields}"
+        )
+
+
+def test_render_data_proportion_fields_match_schema() -> None:
+    """Proportion fields in silhouette_render.jsx DATA.p must be valid."""
+    schema = _load_schema()
+    prop_ref = schema["properties"]["proportion"]
+    prop_schema = _resolve_ref(schema, prop_ref["$ref"])
+    schema_fields = set(prop_schema["properties"].keys())
+
+    d = _extract_render_data()
+    for abbrev_key in d["p"]:
+        full_key = _RENDER_PROPORTION_ABBREV.get(abbrev_key, abbrev_key)
+        assert full_key in schema_fields, (
+            f"Render proportion key '{abbrev_key}' (→ '{full_key}') "
+            f"not in Proportion schema: {schema_fields}"
+        )
+
+
+def test_render_data_contour_is_valid() -> None:
+    """silhouette_render.jsx DATA.c must be a non-empty [dx,dy] array."""
+    d = _extract_render_data()
+    assert isinstance(d["c"], list)
+    assert len(d["c"]) >= 3  # noqa: PLR2004
+    for pt in d["c"][:5]:
+        assert isinstance(pt, list)  # noqa: S101
+        assert len(pt) == 2  # noqa: PLR2004, S101
+
+
+# stick_to_mesh_pipeline.jsx: landmark entries use field names from the
+# Landmark schema and must stay synchronised.  The DATA arrays (dy,
+# widths, prior_ratios, final_ratios, rewards) are pipeline-specific.
+
+def _extract_pipeline_data() -> dict:
+    """Parse the ``const DATA = {...};`` JSON from stick_to_mesh_pipeline.jsx."""
+    source = PIPELINE_JSX.read_text(encoding="utf-8")
+    match = re.search(r"const\s+DATA\s*=\s*(\{.+?\});", source, re.DOTALL)
+    assert match, "const DATA = {...}; not found in stick_to_mesh_pipeline.jsx"
+    raw = match.group(1)
+    raw = re.sub(r"(?<![0-9])\.(\d)", r"0.\1", raw)
+    return json.loads(raw)
+
+
+def test_pipeline_data_landmark_fields_match_schema() -> None:
+    """Landmark entries in stick_to_mesh_pipeline.jsx must use valid field names."""
+    schema = _load_schema()
+    landmark_ref = schema["properties"]["landmarks"]["items"]
+    landmark_schema = _resolve_ref(schema, landmark_ref["$ref"])
+    schema_fields = set(landmark_schema["properties"].keys())
+
+    d = _extract_pipeline_data()
+    sample = d["landmarks"][0]
+    for key in sample:
+        assert key in schema_fields, (
+            f"Pipeline landmark key '{key}' not in Landmark schema: {schema_fields}"
+        )
+
+
+def test_pipeline_data_has_expected_structure() -> None:
+    """stick_to_mesh_pipeline.jsx DATA must have all expected arrays."""
+    d = _extract_pipeline_data()
+    expected_keys = {"dy", "widths", "prior_ratios", "final_ratios", "rewards", "landmarks"}
+    assert set(d.keys()) == expected_keys, (
+        f"Pipeline DATA keys {set(d.keys())} != expected {expected_keys}"
+    )
+    # All parallel arrays must be the same length.
+    n = len(d["dy"])
+    assert len(d["widths"]) == n
+    assert len(d["prior_ratios"]) == n
+    assert len(d["final_ratios"]) == n
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# HIGH #5 — README.md section table and API signatures
+#
+# The README documents 28 sections and shows MetaBuilder/SilhouetteDocument
+# API examples.  These tests catch silent drift when sections are added/
+# removed or builder methods are renamed.
+# ═════════════════════════════════════════════════════════════════════════
+
+README_PATH = ROOT / "README.md"
+
+
+def test_readme_section_count_matches_model() -> None:
+    """The README section table must list exactly as many sections as
+    SilhouetteV4 has required fields.
+    """
+    readme = README_PATH.read_text(encoding="utf-8")
+    required_count = sum(
+        1 for fi in SilhouetteV4.model_fields.values() if fi.is_required()
+    )
+
+    # Count rows in the section table (lines matching "| `section_name` |").
+    table_rows = re.findall(r"^\|\s*`[a-z_]+`\s*\|", readme, re.MULTILINE)
+    assert len(table_rows) == required_count, (
+        f"README section table has {len(table_rows)} rows, "
+        f"but SilhouetteV4 has {required_count} required fields. "
+        f"Update the README table."
+    )
+
+
+def test_readme_section_names_match_model() -> None:
+    """Every section name in the README table must correspond to a
+    SilhouetteV4 field (by name or alias).
+    """
+    readme = README_PATH.read_text(encoding="utf-8")
+    # Extract section names from the table.
+    readme_sections = set(re.findall(r"^\|\s*`([a-z_]+)`\s*\|", readme, re.MULTILINE))
+
+    # Build the set of valid names (field names + aliases).
+    valid_names: set[str] = set()
+    for name, fi in SilhouetteV4.model_fields.items():
+        valid_names.add(name)
+        if fi.alias:
+            valid_names.add(fi.alias)
+
+    unknown = readme_sections - valid_names
+    assert not unknown, (
+        f"README section table contains names not in the model: {unknown}"
+    )
+
+    # Check the reverse: every required field must appear.
+    required_names: set[str] = set()
+    for name, fi in SilhouetteV4.model_fields.items():
+        if fi.is_required():
+            required_names.add(fi.alias if fi.alias else name)
+
+    missing = required_names - readme_sections
+    assert not missing, (
+        f"README section table is missing required fields: {missing}"
+    )
+
+
+def test_readme_builder_methods_exist() -> None:
+    """MetaBuilder method names referenced in README examples must exist
+    on the actual MetaBuilder class.
+    """
+    from lib.builder import MetaBuilder
+
+    readme = README_PATH.read_text(encoding="utf-8")
+    # Extract .method_name( calls chained on MetaBuilder in the code block.
+    methods_in_readme = set(re.findall(r"\.([a-z_]+)\(", readme))
+    # Filter to methods that appear in the MetaBuilder chain (lines 49-63).
+    meta_methods = {
+        "crop_rect", "midline", "y_range", "scale", "contour_info",
+        "extraction", "timing", "classify", "contour_quality",
+        "bounding_box", "sections", "build",
+    }
+    for method in meta_methods:
+        if method in methods_in_readme:
+            assert hasattr(MetaBuilder, method), (
+                f"README references MetaBuilder.{method}() but the method "
+                f"does not exist."
+            )
+
+
+def test_readme_document_api_methods_exist() -> None:
+    """SilhouetteDocument methods referenced in README must exist."""
+    from lib.builder import SilhouetteDocument
+
+    assert hasattr(SilhouetteDocument, "from_json"), (
+        "README references SilhouetteDocument.from_json but method is missing."
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# HIGH #6 — Test fixture field coverage
+#
+# _minimal_sections() in test_builder.py returns hand-written dicts that
+# must cover all SilhouetteV4 section fields.  If a new section is added
+# to the model, this test fails.
+# ═════════════════════════════════════════════════════════════════════════
+
+
+def test_fixture_covers_all_sections() -> None:
+    """_minimal_sections() must return a key for every SilhouetteV4 section
+    (excluding ``meta`` which uses a separate builder, and the optional
+    ``gesture_line_spline``).
+    """
+    # Import the fixture function from the test module.
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "test_builder", ROOT / "tests" / "test_builder.py",
+    )
+    assert spec is not None  # noqa: S101
+    assert spec.loader is not None  # noqa: S101
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    sections = mod._minimal_sections()
+
+    # Every required field except meta must be present.
+    expected: set[str] = set()
+    for name, fi in SilhouetteV4.model_fields.items():
+        if name == "meta":
+            continue
+        if not fi.is_required():
+            continue
+        # Use alias if present (gesture_line for principal_axes).
+        key = fi.alias if fi.alias else name
+        expected.add(key)
+
+    fixture_keys = set(sections.keys())
+    missing = expected - fixture_keys
+    assert not missing, (
+        f"_minimal_sections() is missing keys for required fields: {missing}. "
+        f"Add fixture data for new model sections."
+    )
+
+    extra = fixture_keys - expected
+    assert not extra, (
+        f"_minimal_sections() has keys not matching any required field: {extra}. "
+        f"Was a section renamed or removed?"
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# HIGH #7 — RIGHT_END constant must be defined in one place
+#
+# Previously duplicated between scripts/generate_v4.py and lib/parser.py.
+# Now extracted to lib/constants.py.  These tests ensure both consumers
+# import the shared value and that it stays consistent.
+# ═════════════════════════════════════════════════════════════════════════
+
+
+def test_right_end_shared_constant_is_consistent() -> None:
+    """lib/constants.py RIGHT_END must be importable and equal to 727."""
+    from lib.constants import RIGHT_END
+
+    assert RIGHT_END == 727, (  # noqa: PLR2004
+        f"lib/constants.RIGHT_END changed to {RIGHT_END}. "
+        f"Verify that both parser.py and generate_v4.py handle this correctly."
+    )
+
+
+def test_parser_uses_shared_right_end() -> None:
+    """lib/parser.py must import RIGHT_END from lib.constants, not define
+    its own literal.
+    """
+    source = (ROOT / "lib" / "parser.py").read_text(encoding="utf-8")
+    assert "from lib.constants import" in source, (
+        "lib/parser.py does not import from lib.constants. "
+        "It should use the shared RIGHT_END constant."
+    )
+    # Must NOT have a standalone _RIGHT_END = <number> assignment.
+    standalone = re.search(r"^_RIGHT_END\s*=\s*\d+", source, re.MULTILINE)
+    assert standalone is None, (
+        "lib/parser.py still has a hardcoded _RIGHT_END = <number> assignment. "
+        "Remove it and use the import from lib.constants."
+    )
+
+
+def test_generate_v4_uses_shared_right_end() -> None:
+    """scripts/generate_v4.py must import RIGHT_END from lib.constants,
+    not define its own literal.
+    """
+    source = (ROOT / "scripts" / "generate_v4.py").read_text(encoding="utf-8")
+    assert "from lib.constants import" in source, (
+        "scripts/generate_v4.py does not import from lib.constants. "
+        "It should use the shared RIGHT_END constant."
+    )
+    # Must NOT have a standalone RIGHT_END = <number> assignment.
+    standalone = re.search(r"^RIGHT_END\s*=\s*\d+", source, re.MULTILINE)
+    assert standalone is None, (
+        "scripts/generate_v4.py still has a hardcoded RIGHT_END = <number>. "
+        "Remove it and use the import from lib.constants."
     )

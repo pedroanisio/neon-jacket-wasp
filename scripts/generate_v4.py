@@ -28,12 +28,11 @@ from numpy.polynomial import polynomial as P
 import warnings
 
 from lib.builder import SilhouetteDocument
+from lib.constants import RIGHT_END
 
 warnings.filterwarnings("ignore")
 
 _trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
-
-RIGHT_END = 727  # boundary: right (0..726) | left (727..1199)
 
 
 # ═══════════════════════════════════════════════════════════════════
