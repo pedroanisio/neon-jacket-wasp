@@ -1,6 +1,6 @@
 services:
   silhouette-app:
-    build: frontend/silhouette-app
+    build: packages/silhouette-2d
     ports:
       - "3000:3000"
     volumes:
