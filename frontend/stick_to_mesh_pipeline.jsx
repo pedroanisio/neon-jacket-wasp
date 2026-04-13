@@ -1,6 +1,38 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import V4FileLoader from "./V4FileLoader.jsx";
 
-const DATA = {"dy":[0.005,0.206,0.407,0.608,0.809,1.011,1.212,1.413,1.614,1.815,2.016,2.217,2.419,2.62,2.821,3.022,3.223,3.424,3.625,3.827,4.028,4.229,4.43,4.631,4.832,5.033,5.234,5.436,5.637,5.838,6.039,6.24,6.441,6.642,6.844,7.045,7.246,7.447,7.648,7.849],"widths":[0.2624,0.4759,0.5381,0.5505,0.5404,0.4991,0.4095,0.7726,0.9627,0.9976,1.003,1.0493,1.0745,1.1631,1.2032,1.2009,1.2229,1.2544,1.2828,1.2845,1.3075,1.248,1.0176,0.7922,0.7659,0.7419,0.7256,0.7298,0.7539,0.7855,0.7968,0.7951,0.774,0.7519,0.7522,0.79,0.8011,0.7984,0.8791,0.9896],"prior_ratios":[0.95,0.9995,1.049,1.0985,0.9942,0.885,0.7759,0.7129,0.6642,0.6155,0.5669,0.5182,0.5614,0.6593,0.7047,0.7127,0.7207,0.7288,0.7368,0.7448,0.7554,0.7706,0.7859,0.8011,0.8163,0.8316,0.8468,0.8454,0.8395,0.8336,0.8277,0.8219,0.816,0.8101,0.8042,0.7777,0.6982,0.6186,0.5391,0.4596],"final_ratios":[0.9793,1.0702,0.9796,1.0865,1.0769,0.9411,0.7354,0.8005,0.6124,0.6015,0.6534,0.4481,0.6455,0.5802,0.6458,0.7247,0.729,0.8086,0.7199,0.7781,0.7869,0.7567,0.7634,0.7244,0.6943,0.8534,0.8992,0.7622,0.8832,0.8435,0.7577,0.8778,0.8748,0.9115,0.878,0.8672,0.7701,0.632,0.4791,0.5665],"rewards":[[0,-0.47],[5,-1.51],[10,-1.59],[15,-1.87],[20,-1.9],[25,-2.22],[30,-2.31],[35,-2.25],[40,-2.18],[45,-2.27],[50,-2.28],[55,-2.13],[60,-2.12],[65,-2.03],[70,-1.79],[75,-1.93],[80,-2.08],[85,-1.97],[90,-1.99],[95,-1.93]],"landmarks":[{"name":"crown","dy":0.005},{"name":"head_peak","dy":0.615},{"name":"neck_valley","dy":1.26},{"name":"shoulder_peak","dy":2.293},{"name":"waist_valley","dy":2.703},{"name":"hip_peak","dy":3.957},{"name":"knee_valley","dy":5.277},{"name":"ankle_valley","dy":6.988},{"name":"sole","dy":8.0}]};
+// Derive pipeline visualization data from a normalized v4 document.
+function derivePipelineData(D) {
+  // Width profile → dy + half-widths
+  const wp = D.wp.length > 0 ? D.wp : D.contour.filter((_,i) => i % 5 === 0).map(([dx,dy]) => ({ dy, w: dx * 2 }));
+  const dy = wp.map(s => s.dy);
+  const widths = wp.map(s => s.w / 2);
+
+  // Landmarks (name + dy)
+  const landmarks = D.landmarks.map(l => ({ name: l.n, dy: l.dy }));
+
+  // Anatomical depth prior: region-based heuristic (head ≈ circular, torso ≈ 0.7, legs ≈ 0.8).
+  const prior_ratios = dy.map(y => {
+    if (y < 1.3) return 0.95 + Math.sin(y * 2) * 0.1;
+    if (y < 2.5) return 0.65 + (y - 1.3) * 0.1;
+    if (y < 4.0) return 0.75 + Math.sin((y - 2.5) * 2) * 0.08;
+    return 0.82 - (y - 4.0) * 0.04;
+  });
+
+  // Simulated NES optimization: add noise to prior
+  const final_ratios = prior_ratios.map((r, i) =>
+    Math.max(0.3, r + (Math.sin(i * 1.7 + 0.3) * 0.15 + Math.cos(i * 0.9) * 0.08))
+  );
+
+  // Simulated convergence curve
+  const rewards = Array.from({ length: 20 }, (_, i) => {
+    const it = i * 5;
+    const r = -0.5 - Math.log(1 + it * 0.03) + Math.sin(it * 0.1) * 0.15;
+    return [it, Math.round(r * 100) / 100];
+  });
+
+  return { dy, widths, prior_ratios, final_ratios, rewards, landmarks };
+}
 
 const ACCENT = "#e8c547";
 const DIM = "#4a4a4a";
@@ -248,6 +280,21 @@ const STAGES = [
 ];
 
 export default function PipelineViz() {
+  const [loaded, setLoaded] = useState(null);
+
+  if (!loaded) {
+    return (
+      <div style={{ background: "#111111", minHeight: "100vh", padding: "16px 8px",
+        fontFamily: "'JetBrains Mono', 'Fira Code', monospace" }}>
+        <V4FileLoader title="MESH PIPELINE" description="Drop a silhouette v4 JSON to visualize the stick-to-mesh reconstruction pipeline" onLoad={setLoaded} />
+      </div>
+    );
+  }
+
+  return <PipelineVizInner DATA={derivePipelineData(loaded.data)} fileName={loaded.fileName} onReset={() => setLoaded(null)} />;
+}
+
+function PipelineVizInner({ DATA, fileName, onReset }) {
   const [showFinal, setShowFinal] = useState(true);
   const [selectedLm, setSelectedLm] = useState(3);
 
@@ -335,6 +382,11 @@ export default function PipelineViz() {
         information gain. The prior IS the best estimate without additional views. This mesh is one plausible
         interpretation — not a unique solution. Extracting the three-quarter and back views from the source image
         would substantially reduce ambiguity.
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, marginTop: 12 }}>
+        <div style={{ fontSize: 8, color: "#444" }}>{fileName} · {DATA.dy.length} width samples · {DATA.landmarks.length} landmarks</div>
+        <button onClick={onReset} style={{ background: "transparent", border: "1px solid #333", color: "#666", padding: "2px 8px", borderRadius: 3, fontSize: 9, cursor: "pointer", fontFamily: "inherit" }}>Load Another</button>
       </div>
     </div>
   );

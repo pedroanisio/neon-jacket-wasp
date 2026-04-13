@@ -1,9 +1,9 @@
 import { useState, lazy, Suspense } from "react";
 
 const TABS = [
-  { id: "loader",   label: "V4 Loader",      component: lazy(() => import("@frontend/silhouette_loader.jsx")) },
-  { id: "analysis", label: "V4 Analysis",     component: lazy(() => import("@frontend/v4_silhouette_analysis.jsx")) },
-  { id: "render",   label: "V2 Render",       component: lazy(() => import("@frontend/silhouette_render.jsx")) },
+  { id: "loader",   label: "Loader",          component: lazy(() => import("@frontend/silhouette_loader.jsx")) },
+  { id: "analysis", label: "Analysis",        component: lazy(() => import("@frontend/v4_silhouette_analysis.jsx")) },
+  { id: "render",   label: "Contour",         component: lazy(() => import("@frontend/silhouette_render.jsx")) },
   { id: "pipeline", label: "Mesh Pipeline",   component: lazy(() => import("@frontend/stick_to_mesh_pipeline.jsx")) },
 ];
 

@@ -216,19 +216,20 @@ def test_loader_field_path_exists_in_schema(path: str) -> None:
     )
 
 
-def test_loader_jsx_raw_field_access_covered() -> None:
-    """Every ``raw.<section>`` access in normalize() must appear in the
+NORMALIZE_JS = FRONTEND_DIR / "normalize_v4.js"
+
+
+def test_normalize_raw_field_access_covered() -> None:
+    """Every ``raw.<section>`` access in normalize_v4.js must appear in the
     declared LOADER_FIELD_PATHS list.
 
-    This catches newly added ``raw.xxx`` references in the JSX that were
+    This catches newly added ``raw.xxx`` references that were
     not registered in the contract list.
     """
-    source = LOADER_JSX.read_text(encoding="utf-8")
-    # Extract the normalize() function body (ends at the next top-level function).
+    source = NORMALIZE_JS.read_text(encoding="utf-8")
     match = re.search(r"function normalize\(raw\)\s*\{", source)
-    assert match, "normalize() function not found in silhouette_loader.jsx"
+    assert match, "normalize() function not found in normalize_v4.js"
     start = match.start()
-    # Find closing brace at same indentation level.
     brace_depth = 0
     end = start
     for i, ch in enumerate(source[start:], start=start):
@@ -241,10 +242,8 @@ def test_loader_jsx_raw_field_access_covered() -> None:
                 break
     body = source[start:end]
 
-    # Find raw.XXXX references (first two segments: raw.section.field).
     raw_accesses = set(re.findall(r"raw\.([a-z_]+(?:\.[a-z_]+)?)", body))
 
-    # Build the set of first-two-segment prefixes from our declared paths.
     declared_prefixes: set[str] = set()
     for p in LOADER_FIELD_PATHS:
         parts = p.split(".")
@@ -260,153 +259,67 @@ def test_loader_jsx_raw_field_access_covered() -> None:
     )
 
 
+def test_loader_imports_shared_normalize() -> None:
+    """silhouette_loader.jsx must import from the shared normalize_v4.js."""
+    source = LOADER_JSX.read_text(encoding="utf-8")
+    assert "normalize_v4" in source, (
+        "silhouette_loader.jsx does not import from normalize_v4.js."
+    )
+
+
 # ═════════════════════════════════════════════════════════════════════════
-# CRITICAL #2 — Hardcoded snapshot in v4_silhouette_analysis.jsx
+# CRITICAL #2 / HIGH #4 — All frontend components use shared v4 pipeline
 #
-# The ``const D = {{...}}`` object is a frozen demo dataset.  These tests
-# assert its top-level section keys and nested structure match what the
-# current schema expects, so that a schema change surfaces as a test
-# failure rather than silently producing a stale demo.
+# All components now load v4 JSON at runtime via the shared normalizer
+# (normalize_v4.js) and file loader (V4FileLoader.jsx).  These tests
+# verify no component has regressed to embedded hardcoded data and that
+# all import the shared modules.
 # ═════════════════════════════════════════════════════════════════════════
 
-# Mapping from abbreviated keys in const D to the schema section names.
-# This is the normalization contract: silhouette_loader.jsx normalize()
-# produces objects with these abbreviated keys from the full schema names.
-_ABBREVIATED_TO_SCHEMA: dict[str, str] = {
-    "c": "contour",
-    "l": "landmarks",
-    "wp": "width_profile",
-    "ar": "area_profile",
-    "sd": "style_deviation",
-    "sc": "shape_complexity",
-    "gl": "gesture_line",
-    "pr": "proportion",
-    "vol": "volumetric_estimates",
-    "hull": "convex_hull",
-    "br": "body_regions",
-    "bio": "biomechanics",
-    "med": "medial_axis",
-}
+V4_FILE_LOADER_JSX = FRONTEND_DIR / "V4FileLoader.jsx"
+
+_ALL_JSX_FILES = [ANALYSIS_JSX, RENDER_JSX, PIPELINE_JSX]
 
 
-def _extract_const_d() -> dict:
-    """Parse the ``const D = {...};`` JSON object from the JSX source."""
-    source = ANALYSIS_JSX.read_text(encoding="utf-8")
-    match = re.search(r"const\s+D\s*=\s*(\{.+?\});", source, re.DOTALL)
-    assert match, "const D = {...}; not found in v4_silhouette_analysis.jsx"
-    raw = match.group(1)
-    # Keys are quoted strings, but numbers use bare decimals (.007 instead
-    # of 0.007) which is valid JS but not valid JSON.  Prefix with 0.
-    raw = re.sub(r"(?<![0-9])\.(\d)", r"0.\1", raw)
-    return json.loads(raw)
+def test_shared_normalize_exists() -> None:
+    """The shared normalize_v4.js module must exist."""
+    assert NORMALIZE_JS.exists(), "frontend/normalize_v4.js does not exist."
 
 
-def test_snapshot_has_all_expected_section_keys() -> None:
-    """const D must contain every abbreviated section key."""
-    d = _extract_const_d()
-    missing = set(_ABBREVIATED_TO_SCHEMA.keys()) - set(d.keys())
-    assert not missing, (
-        f"const D is missing section keys: {missing}. "
-        f"Update the snapshot when the schema changes."
+def test_shared_file_loader_exists() -> None:
+    """The shared V4FileLoader.jsx module must exist."""
+    assert V4_FILE_LOADER_JSX.exists(), "frontend/V4FileLoader.jsx does not exist."
+
+
+def test_file_loader_imports_normalize() -> None:
+    """V4FileLoader.jsx must import from normalize_v4.js."""
+    source = V4_FILE_LOADER_JSX.read_text(encoding="utf-8")
+    assert "normalize_v4" in source, (
+        "V4FileLoader.jsx does not import from normalize_v4.js."
     )
 
 
-def test_snapshot_has_no_unknown_section_keys() -> None:
-    """const D must not contain keys outside the known abbreviation set."""
-    d = _extract_const_d()
-    unknown = set(d.keys()) - set(_ABBREVIATED_TO_SCHEMA.keys())
-    assert not unknown, (
-        f"const D contains unexpected keys: {unknown}. "
-        f"Register them in _ABBREVIATED_TO_SCHEMA if intentional."
+@pytest.mark.parametrize("jsx_path", _ALL_JSX_FILES, ids=lambda p: p.name)
+def test_jsx_imports_v4_file_loader(jsx_path: Path) -> None:
+    """Each renderer must import V4FileLoader for v4 JSON loading."""
+    source = jsx_path.read_text(encoding="utf-8")
+    assert "V4FileLoader" in source, (
+        f"{jsx_path.name} does not import V4FileLoader."
     )
 
 
-def test_snapshot_sections_map_to_valid_schema_sections() -> None:
-    """Every abbreviated key must map to a real schema section."""
-    schema = _load_schema()
-    schema_sections = set(schema.get("properties", {}).keys())
-    for abbrev, section in _ABBREVIATED_TO_SCHEMA.items():
-        assert section in schema_sections, (
-            f"Abbreviated key '{abbrev}' maps to '{section}' which is "
-            f"not a top-level property in the JSON schema. "
-            f"Was the section renamed or removed?"
-        )
-
-
-def test_snapshot_landmark_fields_match_schema() -> None:
-    """Landmark entries in const D must use field names from the schema."""
-    schema = _load_schema()
-    landmark_ref = schema["properties"]["landmarks"]["items"]
-    landmark_schema = _resolve_ref(schema, landmark_ref["$ref"])
-    schema_fields = set(landmark_schema["properties"].keys())
-
-    d = _extract_const_d()
-    # Abbreviated landmark keys: n→name, d→description, dy→dy, dx→dx.
-    abbrev_to_full = {"n": "name", "d": "description", "dy": "dy", "dx": "dx"}
-    sample = d["l"][0]
-    for abbrev_key in sample:
-        full_key = abbrev_to_full.get(abbrev_key, abbrev_key)
-        assert full_key in schema_fields, (
-            f"Landmark abbreviated key '{abbrev_key}' (→ '{full_key}') "
-            f"not found in Landmark schema fields: {schema_fields}"
-        )
-
-
-def test_snapshot_contour_is_nonempty_point_array() -> None:
-    """const D.c must be a non-empty array of [dx, dy] pairs."""
-    d = _extract_const_d()
-    assert isinstance(d["c"], list)
-    assert len(d["c"]) > 0
-    for pt in d["c"][:5]:
-        assert isinstance(pt, list)  # noqa: S101
-        assert len(pt) == 2  # noqa: PLR2004, S101
-
-
-def test_snapshot_abbreviation_map_covers_all_required_sections() -> None:
-    """Every required SilhouetteV4 section that normalize() exposes must
-    have an abbreviation entry.
-
-    If a new required section is added to the model, this test fails —
-    forcing a conscious decision about whether the demo snapshot and the
-    abbreviation map need updating.
-    """
-    # Sections that normalize() currently exposes (the ones that appear
-    # in the rendering pipeline).  Not every schema section needs to be
-    # in the demo — but any section the renderer touches must be mapped.
-    rendered_sections = set(_ABBREVIATED_TO_SCHEMA.values())
-    schema = _load_schema()
-    all_sections = set(schema.get("properties", {}).keys())
-
-    # Sections intentionally excluded from the demo renderer.
-    excluded_from_demo = {
-        "meta",
-        "contour",  # handled as "c" already
-        "midline",
-        "strokes",
-        "symmetry",
-        "measurements",
-        "parametric",
-        "candidates",
-        "curvature",
-        "cross_section_topology",
-        "fourier_descriptors",
-        "contour_normals",
-        "shape_vector",
-        "hu_moments",
-        "turning_function",
-        "curvature_scale_space",
-        "gesture_line_spline",
-    }
-    expected = all_sections - excluded_from_demo - {"contour"}
-    # "contour" is mapped as "c"
-    expected.add("contour")
-
-    missing = (expected & all_sections) - rendered_sections - excluded_from_demo
-    assert not missing, (
-        f"Schema sections {missing} are not covered by either the "
-        f"abbreviation map or the exclusion list. Add them to "
-        f"_ABBREVIATED_TO_SCHEMA or excluded_from_demo."
-    )
+@pytest.mark.parametrize("jsx_path", _ALL_JSX_FILES, ids=lambda p: p.name)
+def test_jsx_has_no_embedded_data_blob(jsx_path: Path) -> None:
+    """No renderer should contain a hardcoded const DATA/D = {...} blob."""
+    source = jsx_path.read_text(encoding="utf-8")
+    # Check for large inline JSON objects (>500 chars on one line).
+    for i, line in enumerate(source.splitlines(), 1):
+        if re.match(r"const\s+(DATA|D)\s*=\s*\{", line) and len(line) > 500:  # noqa: PLR2004
+            msg = (
+                f"{jsx_path.name}:{i} still contains a hardcoded data blob. "
+                f"All components should load v4 JSON via V4FileLoader."
+            )
+            raise AssertionError(msg)
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -549,150 +462,9 @@ def test_schema_file_matches_model() -> None:
     )
 
 
-# ═════════════════════════════════════════════════════════════════════════
-# HIGH #4 — silhouette_render.jsx and stick_to_mesh_pipeline.jsx
-#
-# These renderers embed hardcoded DATA objects whose field structure must
-# stay aligned with the schema.  The abbreviated keys map back to v4
-# schema sections, similar to the CRITICAL #2 snapshot tests.
-# ═════════════════════════════════════════════════════════════════════════
-
-# silhouette_render.jsx DATA keys and their schema mappings.
-# DATA has: c (contour), s (strokes), l (landmarks), p (proportions), m (meta classification).
-_RENDER_ABBREVIATED_TO_SCHEMA: dict[str, str] = {
-    "c": "contour",
-    "s": "strokes",
-    "l": "landmarks",
-    "p": "proportion",
-}
-
-# Within DATA.l[*], abbreviated keys map to Landmark schema fields.
-_RENDER_LANDMARK_ABBREV: dict[str, str] = {
-    "n": "name",
-    "d": "description",
-    "dy": "dy",
-    "dx": "dx",
-}
-
-# Within DATA.s[*], abbreviated keys map to Stroke schema fields.
-_RENDER_STROKE_ABBREV: dict[str, str] = {
-    "r": "region",
-    "p": "points",
-}
-
-# Within DATA.p, abbreviated keys map to Proportion schema fields.
-_RENDER_PROPORTION_ABBREV: dict[str, str] = {
-    "hc": "head_count_total",
-    "sr": "segment_ratios",
-    "wr": "width_ratios",
-}
-
-
-def _extract_render_data() -> dict:
-    """Parse the ``const DATA = {...};`` JSON from silhouette_render.jsx."""
-    source = RENDER_JSX.read_text(encoding="utf-8")
-    match = re.search(r"const\s+DATA\s*=\s*(\{.+?\});", source, re.DOTALL)
-    assert match, "const DATA = {...}; not found in silhouette_render.jsx"
-    raw = match.group(1)
-    raw = re.sub(r"(?<![0-9])\.(\d)", r"0.\1", raw)
-    return json.loads(raw)
-
-
-def test_render_data_section_keys_map_to_schema() -> None:
-    """silhouette_render.jsx DATA keys must map to valid schema sections."""
-    schema = _load_schema()
-    schema_sections = set(schema.get("properties", {}).keys())
-    for abbrev, section in _RENDER_ABBREVIATED_TO_SCHEMA.items():
-        assert section in schema_sections, (
-            f"Render DATA key '{abbrev}' maps to '{section}' which is "
-            f"not in the JSON schema."
-        )
-
-
-def test_render_data_landmark_fields_match_schema() -> None:
-    """Landmark entries in silhouette_render.jsx DATA.l must use valid fields."""
-    schema = _load_schema()
-    landmark_ref = schema["properties"]["landmarks"]["items"]
-    landmark_schema = _resolve_ref(schema, landmark_ref["$ref"])
-    schema_fields = set(landmark_schema["properties"].keys())
-
-    d = _extract_render_data()
-    sample = d["l"][0]
-    for abbrev_key in sample:
-        full_key = _RENDER_LANDMARK_ABBREV.get(abbrev_key, abbrev_key)
-        assert full_key in schema_fields, (
-            f"Render landmark key '{abbrev_key}' (→ '{full_key}') "
-            f"not in Landmark schema: {schema_fields}"
-        )
-
-
-def test_render_data_proportion_fields_match_schema() -> None:
-    """Proportion fields in silhouette_render.jsx DATA.p must be valid."""
-    schema = _load_schema()
-    prop_ref = schema["properties"]["proportion"]
-    prop_schema = _resolve_ref(schema, prop_ref["$ref"])
-    schema_fields = set(prop_schema["properties"].keys())
-
-    d = _extract_render_data()
-    for abbrev_key in d["p"]:
-        full_key = _RENDER_PROPORTION_ABBREV.get(abbrev_key, abbrev_key)
-        assert full_key in schema_fields, (
-            f"Render proportion key '{abbrev_key}' (→ '{full_key}') "
-            f"not in Proportion schema: {schema_fields}"
-        )
-
-
-def test_render_data_contour_is_valid() -> None:
-    """silhouette_render.jsx DATA.c must be a non-empty [dx,dy] array."""
-    d = _extract_render_data()
-    assert isinstance(d["c"], list)
-    assert len(d["c"]) >= 3  # noqa: PLR2004
-    for pt in d["c"][:5]:
-        assert isinstance(pt, list)  # noqa: S101
-        assert len(pt) == 2  # noqa: PLR2004, S101
-
-
-# stick_to_mesh_pipeline.jsx: landmark entries use field names from the
-# Landmark schema and must stay synchronised.  The DATA arrays (dy,
-# widths, prior_ratios, final_ratios, rewards) are pipeline-specific.
-
-def _extract_pipeline_data() -> dict:
-    """Parse the ``const DATA = {...};`` JSON from stick_to_mesh_pipeline.jsx."""
-    source = PIPELINE_JSX.read_text(encoding="utf-8")
-    match = re.search(r"const\s+DATA\s*=\s*(\{.+?\});", source, re.DOTALL)
-    assert match, "const DATA = {...}; not found in stick_to_mesh_pipeline.jsx"
-    raw = match.group(1)
-    raw = re.sub(r"(?<![0-9])\.(\d)", r"0.\1", raw)
-    return json.loads(raw)
-
-
-def test_pipeline_data_landmark_fields_match_schema() -> None:
-    """Landmark entries in stick_to_mesh_pipeline.jsx must use valid field names."""
-    schema = _load_schema()
-    landmark_ref = schema["properties"]["landmarks"]["items"]
-    landmark_schema = _resolve_ref(schema, landmark_ref["$ref"])
-    schema_fields = set(landmark_schema["properties"].keys())
-
-    d = _extract_pipeline_data()
-    sample = d["landmarks"][0]
-    for key in sample:
-        assert key in schema_fields, (
-            f"Pipeline landmark key '{key}' not in Landmark schema: {schema_fields}"
-        )
-
-
-def test_pipeline_data_has_expected_structure() -> None:
-    """stick_to_mesh_pipeline.jsx DATA must have all expected arrays."""
-    d = _extract_pipeline_data()
-    expected_keys = {"dy", "widths", "prior_ratios", "final_ratios", "rewards", "landmarks"}
-    assert set(d.keys()) == expected_keys, (
-        f"Pipeline DATA keys {set(d.keys())} != expected {expected_keys}"
-    )
-    # All parallel arrays must be the same length.
-    n = len(d["dy"])
-    assert len(d["widths"]) == n
-    assert len(d["prior_ratios"]) == n
-    assert len(d["final_ratios"]) == n
+# HIGH #4 tests (embedded DATA validation for render/pipeline JSX) have
+# been superseded by the CRITICAL #2 / HIGH #4 combined section above —
+# all components now use V4FileLoader + normalize_v4.js at runtime.
 
 
 # ═════════════════════════════════════════════════════════════════════════
