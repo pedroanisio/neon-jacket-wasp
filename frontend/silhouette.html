@@ -719,6 +719,18 @@ function loadJsonData(json) {
     for (const lm of json.landmarks) {
       newLM[lm.name] = [lm.dx, lm.dy];
     }
+    // Map HD anatomical landmark names to bone-system aliases
+    const aliasMap = {
+      neck_valley:    'suprasternal',
+      shoulder_peak:  'acromion_r',
+      waist_valley:   'waist',
+      hip_peak:       'great_trochanter_r',
+      knee_valley:    'patella_r',
+      ankle_valley:   'lateral_malleolus_r',
+    };
+    for (const [alias, src] of Object.entries(aliasMap)) {
+      if (!newLM[alias] && newLM[src]) newLM[alias] = newLM[src];
+    }
   }
   // Compact format: c = flat array, l = dict
   else if (json.c && json.l) {

@@ -8,3 +8,14 @@ services:
       - "${APP_PORT:-3000}:${APP_PORT:-3000}"
     volumes:
       - ./data/output:/app/data:ro
+
+  shell:
+    build:
+      context: .
+      dockerfile: packages/shell/Dockerfile
+      args:
+        APP_PORT: ${SHELL_PORT:-4000}
+    ports:
+      - "${SHELL_PORT:-4000}:${SHELL_PORT:-4000}"
+    volumes:
+      - ./data/output:/app/data:ro

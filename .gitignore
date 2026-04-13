@@ -3,3 +3,6 @@
 .venv
 lineage
 .refactor-backup
+node_modules/
+.env
+dist/
