@@ -1,7 +1,10 @@
 services:
   silhouette-app:
-    build: packages/silhouette-2d
+    build:
+      context: packages/silhouette-2d
+      args:
+        APP_PORT: ${APP_PORT:-3000}
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:${APP_PORT:-3000}"
     volumes:
       - ./data/output:/app/data:ro

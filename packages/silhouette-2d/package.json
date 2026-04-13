@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch & npx serve . -l 3000",
-    "serve": "npx serve . -l 3000",
+    "dev": "tsc --watch & npx serve . -l ${APP_PORT:-3000}",
+    "serve": "npx serve . -l ${APP_PORT:-3000}",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

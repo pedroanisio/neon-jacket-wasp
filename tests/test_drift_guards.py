@@ -890,3 +890,139 @@ def test_generate_v4_uses_shared_right_end() -> None:
         "scripts/generate_v4.py still has a hardcoded RIGHT_END = <number>. "
         "Remove it and use the import from lib.constants."
     )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# MODERATE #8 — Schema codegen freshness
+#
+# The JSON schema is generated from model.py via `make schema`.  The
+# `test_schema_file_matches_model` test (above, in the CRITICAL section)
+# already catches a stale schema.  These additional tests verify that the
+# Makefile wiring is correct so the guard is enforceable at build time.
+# ═════════════════════════════════════════════════════════════════════════
+
+MAKEFILE_PATH = ROOT / "Makefile"
+
+
+def test_makefile_has_check_schema_target() -> None:
+    """The Makefile must have a ``check-schema`` target that validates the
+    committed schema against the model without regenerating it.
+    """
+    makefile = MAKEFILE_PATH.read_text(encoding="utf-8")
+    assert "check-schema" in makefile, (
+        "Makefile is missing the check-schema target. "
+        "Add a target that asserts schema freshness."
+    )
+
+
+def test_makefile_check_runs_check_schema() -> None:
+    """``make check`` must depend on ``check-schema`` so that schema
+    freshness is verified alongside lint and typecheck.
+    """
+    makefile = MAKEFILE_PATH.read_text(encoding="utf-8")
+    # Find the line defining the `check` target and assert check-schema
+    # is in its dependency list.
+    match = re.search(r"^check\s*:(.*)", makefile, re.MULTILINE)
+    assert match, "Makefile has no `check` target."
+    deps = match.group(1)
+    assert "check-schema" in deps, (
+        "`make check` does not depend on `check-schema`. "
+        "Add check-schema to the check target's prerequisites."
+    )
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# MODERATE #9 — Port configuration must be consistent across Docker files
+#
+# The app port was previously hardcoded as 3000 in three independent
+# files.  It is now centralised in .env (APP_PORT) and referenced via
+# variable substitution.  These tests assert that none of the three
+# consumers still embed a bare hardcoded port literal.
+# ═════════════════════════════════════════════════════════════════════════
+
+ENV_PATH = ROOT / ".env"
+DOCKERFILE_PATH = ROOT / "packages" / "silhouette-2d" / "Dockerfile"
+COMPOSE_PATH = ROOT / "docker-compose.yml"
+PKG_JSON_PATH = ROOT / "packages" / "silhouette-2d" / "package.json"
+
+
+def test_env_file_defines_app_port() -> None:
+    """.env must define APP_PORT."""
+    env_text = ENV_PATH.read_text(encoding="utf-8")
+    match = re.search(r"^APP_PORT\s*=\s*(\d+)", env_text, re.MULTILINE)
+    assert match, ".env does not define APP_PORT."
+    port = int(match.group(1))
+    assert port > 0, "APP_PORT must be a positive integer."
+
+
+def test_dockerfile_uses_app_port_variable() -> None:
+    """Dockerfile must reference APP_PORT, not a hardcoded port literal
+    in EXPOSE and CMD.
+    """
+    source = DOCKERFILE_PATH.read_text(encoding="utf-8")
+    # EXPOSE must use the variable.
+    assert re.search(r"EXPOSE\s+\$\{?APP_PORT", source), (
+        "Dockerfile EXPOSE still uses a hardcoded port. "
+        "Use ${APP_PORT} instead."
+    )
+    # CMD / serve must reference the variable.
+    assert "APP_PORT" in source.split("CMD")[1] if "CMD" in source else False, (
+        "Dockerfile CMD still uses a hardcoded port for serve. "
+        "Use ${APP_PORT} instead."
+    )
+
+
+def test_docker_compose_uses_app_port_variable() -> None:
+    """docker-compose.yml port mapping must use ${APP_PORT}, not a literal."""
+    source = COMPOSE_PATH.read_text(encoding="utf-8")
+    assert "APP_PORT" in source, (
+        "docker-compose.yml does not reference APP_PORT. "
+        "Use ${APP_PORT:-3000} in the ports mapping."
+    )
+    # Must NOT have a bare "3000:3000" literal.
+    assert '"3000:3000"' not in source, (
+        'docker-compose.yml still has a hardcoded "3000:3000" port mapping. '
+        "Use the APP_PORT variable."
+    )
+
+
+def test_package_json_uses_app_port_variable() -> None:
+    """package.json serve scripts must reference $APP_PORT, not a literal."""
+    source = PKG_JSON_PATH.read_text(encoding="utf-8")
+    # The dev and serve scripts must reference APP_PORT.
+    assert "APP_PORT" in source, (
+        "package.json scripts do not reference APP_PORT. "
+        "Use ${APP_PORT:-3000} in the serve commands."
+    )
+
+
+def test_port_values_are_consistent() -> None:
+    """The default port across all configuration files must agree with .env."""
+    env_text = ENV_PATH.read_text(encoding="utf-8")
+    match = re.search(r"^APP_PORT\s*=\s*(\d+)", env_text, re.MULTILINE)
+    assert match
+    env_port = match.group(1)
+
+    # docker-compose.yml defaults must use the same port.
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    compose_defaults = re.findall(r"APP_PORT:-(\d+)", compose)
+    for default in compose_defaults:
+        assert default == env_port, (
+            f"docker-compose.yml default port {default} != .env port {env_port}"
+        )
+
+    # package.json defaults must use the same port.
+    pkg = PKG_JSON_PATH.read_text(encoding="utf-8")
+    pkg_defaults = re.findall(r"APP_PORT:-(\d+)", pkg)
+    for default in pkg_defaults:
+        assert default == env_port, (
+            f"package.json default port {default} != .env port {env_port}"
+        )
+
+    # Dockerfile ARG default must use the same port.
+    dockerfile = DOCKERFILE_PATH.read_text(encoding="utf-8")
+    arg_defaults = re.findall(r"ARG\s+APP_PORT\s*=\s*(\d+)", dockerfile)
+    for default in arg_defaults:
+        assert default == env_port, (
+            f"Dockerfile ARG APP_PORT default {default} != .env port {env_port}"
+        )

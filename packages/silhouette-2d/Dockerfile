@@ -14,11 +14,14 @@ FROM node:22-alpine
 
 WORKDIR /app
 
+ARG APP_PORT=3000
+ENV APP_PORT=${APP_PORT}
+
 RUN npm install -g serve@14
 
 COPY --from=build /app/dist/ dist/
 COPY index.html ./
 
-EXPOSE 3000
+EXPOSE ${APP_PORT}
 
-CMD ["serve", ".", "-l", "3000", "-s"]
+CMD ["sh", "-c", "serve . -l ${APP_PORT} -s"]
